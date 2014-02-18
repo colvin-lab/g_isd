@@ -1,6 +1,8 @@
-/* Modified 04 Oct 2013
+/* 
  * 
  * Tim Connolly - tconnolly@ucmerced.edu
+ * Copyright (c) 2014, Regents of the University of California
+ * Released under BSD 2-Clause License (see "LICENSE" file)
  * 
  * This code was modified from the file src/tools/gmx_gyrate.c
  */
@@ -31,6 +33,8 @@
 #include <gromacs/gmx_ana.h>
 
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+// The below section is from gromacs code which was released separately under the LGPL version 2 license.
 
 void write_mat_levels(FILE *out,int n_x, int n_y,int *nlevels,real lo,real hi,t_rgb rlo,t_rgb rhi)
 {
@@ -200,6 +204,11 @@ void write_mat_pixels3(FILE *out,int n_x,int n_y,real **matrix,real lo,real mid,
             fprintf(out,"\"\n");
     }
 }
+
+
+
+// The above section is from gromacs code which was released separately under the LGPL version 2 license.
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 

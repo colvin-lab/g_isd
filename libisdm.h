@@ -1,51 +1,16 @@
-/*
+/* 
  * 
- *                This source code is part of
+ * Tim Connolly - tconnolly@ucmerced.edu
+ * Copyright (c) 2014, Regents of the University of California
+ * Released under BSD 2-Clause License (see "LICENSE" file)
  * 
- *                 G   R   O   M   A   C   S
+ * This library of functions implements various comparison ISDMs
+ * intended to quanitfy the difference between two input structures
+ * from a trajectory. The gromacs libraries are required and
+ * some functions are performed in libmammothmod.c and libesa.c.
  * 
- *          GROningen MAchine for Chemical Simulations
- * 
- *                        VERSION 3.2.0
- * Written by David van der Spoel, Erik Lindahl, Berk Hess, and others.
- * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
- * Copyright (c) 2001-2004, The GROMACS development team,
- * check out http://www.gromacs.org for more information.
- * 
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- * 
- * If you want to redistribute modifications, please consider that
- * scientific software is very special. Version control is crucial -
- * bugs must be traceable. We will be happy to consider code for
- * inclusion in the official distribution, but derived work must not
- * be called official GROMACS. Details are found in the README & COPYING
- * files - if they are missing, get the official version at www.gromacs.org.
- * 
- * To help us fund GROMACS development, we humbly ask that you cite
- * the papers on the package - you can find them in the top README file.
- * 
- * For more info, check our website at http://www.gromacs.org
- * 
- * And Hey:
- * Green Red Orange Magenta Azure Cyan Skyblue
+ * See help output for citation information.
  */
-
-/* Modified 2012-09-26
- * 
- * Joshua L. Phillips - jphillips@lanl.gov
- * T-6/CNLS - Los Alamos National Laboratory
- *
- * This code was originally taken from the file src/tools/gmx_gyrate.c
- * from GROMACS release 4.5.5 and modified for performing shape
- * analysis as described in:
- *
- * Dima, R. I., & Thirumalai, D. (2004). Asymmetry in the shapes of
- * folded and denatured states of proteins. The Journal of Physical
- * Chemistry B, 108(21), 6564-6570. doi:10.1021/jp037128y   
- */ 
 
 
 #include <math.h>

@@ -1,6 +1,8 @@
-/* Modified 04 Oct 2013
+/* 
  * 
  * Tim Connolly - tconnolly@ucmerced.edu
+ * Copyright (c) 2014, Regents of the University of California
+ * Released under BSD 2-Clause License (see "LICENSE" file)
  * 
  * This library of functions implements various comparison ISDMs
  * intended to quanitfy the difference between two input structures
