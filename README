@@ -2,3 +2,23 @@ g_isd
 =====
 
 Molecular dynamics analysis tools based on inter-structure distance.
+
+Expected software packages:
+gcc
+g++
+gromacs-4.5 or newer (older versions may work but haven't been tested)
+xmgrace (to view xvg figures)
+
+
+You will need to set the GMXINC and GMXLIB variables in the makefile.
+By default, gromacs puts these directories at:
+/usr/local/gromacs/include
+/usr/local/gromacs/lib
+
+For the Ubuntu gromacs package, these can both be set to:
+/usr/include/gromacs
+
+You may need to set the GMXLIB environment variable to the
+location of the standard GROMACS topology files. This is
+/usr/local/gromacs/share/gromacs/top by default, but will vary
+between installations.
