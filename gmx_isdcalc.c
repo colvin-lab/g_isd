@@ -120,7 +120,7 @@ int gmx_isdcalc(int argc,char *argv[])
             "code ported from Matlab to C. For this measure, please cite: \n\n"
             "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
             "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
-            "e1001075.\n" },
+            "e1001075.\n\nAssumes only CA atoms." },
         { "-bframe", FALSE, etINT, {&bFrame},
             "Compare range of frames from bframe to eframe to all other " 
             "frames. The bframe and eframe options are applied after the b, " 

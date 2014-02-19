@@ -293,7 +293,7 @@ int gmx_isdmap(int argc,char *argv[])
             "code ported from Matlab to C. For this ISDM, please cite: \n\n"
             "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
             "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
-            "e1001075.\n" },
+            "e1001075.\n\nAssume only CA atoms." },
         { "-setmax", FALSE, etREAL, {&setmax},
             "Set maximum value to threshold the xpm file. Must be greater "
             "than the average inter-structure distance." },

@@ -118,7 +118,7 @@ int gmx_isddecorr(int argc,char *argv[])
         "code ported from Matlab to C. For this ISDM, please cite: \n\n"
         "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
         "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
-        "e1001075.\n" },
+        "e1001075.\n\nAssumes only CA atoms." },
         { "-td", FALSE, etREAL, {&user_td},
         "Time difference used for -tdo output." },
     };
