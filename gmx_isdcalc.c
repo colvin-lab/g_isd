@@ -41,15 +41,27 @@ int gmx_isdcalc(int argc,char *argv[])
         "[TT]g_isdcalc[tt] implements a list of measures designed to ",
         "compare two frames from a trajectory and quantify their difference. ",
         "This tool analyzes the input by comparing each pair of frames in ",
-        "the trajectory and recording some statistics. For each reference ",
-        "frame, the mean and maximum interstructure distance (ISD) with ",
-        "all other frames is recorded. These statistics are optional ",
-        "outputs. A subset of frames can be used as reference structures ",
+        "the trajectory and recording some statistics. The quantified ",
+        "difference between two structures is referred to as the inter-",
+        "structure distance (ISD), and the methods used to measure the ",
+        "ISD are referred to as ISDMs. ",
+        "If no output options are chosen, the mean overall ISD, the overall ",
+        "maximum ISD, and the maximally different pair of frames are output ",
+        "to stdout. ",
+        "The mean and maximum interstructure distance (ISD) for each frame ",
+        "can be output with the -mean and -max options. Variance ",
+        "calculations are optional, and the -var option outputs variance ",
+        "of ISD for each frame to a file and the overall variance to stdout. ",
+        "Optionally, a subset of frames can be used as reference structures ",
         "(still compared to all other frames) with the bframe and eframe ",
-        "options. Variance calculations are optional. An overall mean and ",
-        "max difference is sent to stdout. The default measure if one is not ",
-        "chosen by the user is RMSD. Only one measure can be chosen at a ",
-        "time. The measures of inter-structure distance are called ISDMs."
+        "options. ",
+        "The default ISDM if one is not chosen by the user is RMSD, and only ",
+        "one ISDM can be chosen at a time. ",
+        "For targeted and folding MD simulations, the trajectory can be ",
+        "compared against a reference structure (taken from the topology ",
+        "file) with the -ref output option. If -ref is the only output ",
+        "chosen, the tool will skip the calculations for mean ISD and should ",
+        "complete in less time. "
     };
     
     
@@ -142,7 +154,7 @@ int gmx_isdcalc(int argc,char *argv[])
     t_topology top;
     int        ePBC;
     rvec       *x, *iframe, *jframe, *rframe, *cframe, rrot_xyz, xold;
-    rvec       **frames;
+    rvec       **frames, *topframe, *trjframe;
     real       *nweights, *iweights;
     real       ISD, maxISD, avgISD, varISD, msqi;
     real       *diff, *maxdiff, *avgdiff, *vardiff;
@@ -151,7 +163,7 @@ int gmx_isdcalc(int argc,char *argv[])
     int        *maxframe, *rnum;
     int        i, j, k, m, n, bf, ef, iatoms, natoms, nframes, maxframei;
     int        pcalcs, noptions;
-    gmx_bool   bDFLT, bMean, bVar, bMax, bPair, bFit;
+    gmx_bool   bDFLT, bMean, bVar, bMax, bPair, bRef, bFit;
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
     output_env_t oenv;
@@ -166,6 +178,7 @@ int gmx_isdcalc(int argc,char *argv[])
         { efXVG, "-var",  "var",  ffOPTWR },
         { efXVG, "-max",  "max",  ffOPTWR },
         { efXVG, "-pair", "pair", ffOPTWR },
+        { efXVG, "-ref",  "ref",  ffOPTWR },
     }; 
 #define NFILE asize(fnm)
     int npargs;
@@ -177,6 +190,13 @@ int gmx_isdcalc(int argc,char *argv[])
     parse_common_args(&argc,argv,PCA_CAN_TIME | PCA_CAN_VIEW | PCA_BE_NICE,
                       NFILE,fnm,npargs,pa,asize(desc),desc,0,NULL,&oenv);
     
+    // Output which files?
+    bMean = opt2bSet("-mean", NFILE, fnm);
+    bVar  = opt2bSet("-var",  NFILE, fnm);
+    bMax  = opt2bSet("-max",  NFILE, fnm);
+    bPair = opt2bSet("-pair", NFILE, fnm);
+    bRef  = opt2bSet("-ref",  NFILE, fnm);
+    
     
     /* Reads the tpr file. Outputs a ton of info.
      * 
@@ -186,6 +206,20 @@ int gmx_isdcalc(int argc,char *argv[])
     
     // Asks you to choose a selection of atoms at prompt.
     get_index(&top.atoms,ftp2fn_null(efNDX,NFILE,fnm),1,&iatoms,&index,&grpname);
+    
+    // Save the reference structure if -ref option chosen.
+    if (bRef)
+    {
+        // Set aside new memory to store this frame.
+        snew(topframe, iatoms);
+        // Set aside new memory for the trajectory frame.
+        snew(trjframe, iatoms);
+        // Saves the current frame into frames.
+        for (j = 0; j < iatoms; j++)
+        {
+            copy_rvec(x[(int)index[j]], topframe[j]);
+        }
+    }
     
     // If there are no options at command line, do default behavior.
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
@@ -426,13 +460,6 @@ int gmx_isdcalc(int argc,char *argv[])
         gmx_fatal(FARGS,"\nThis tool only supports using one optional ISDM at a time.\n");
     }
     
-    // Output which files?
-    bMean = opt2bSet("-mean", NFILE, fnm);
-    bVar  = opt2bSet("-var",  NFILE, fnm);
-    bMax  = opt2bSet("-max",  NFILE, fnm);
-    bPair = opt2bSet("-pair", NFILE, fnm);
-    
-    
     
     // Opens trj. Reads first frame. Returns status. Allocates mem for x.
     fprintf(stderr,"\nCounting the number of frames.\n");
@@ -451,7 +478,7 @@ int gmx_isdcalc(int argc,char *argv[])
     snew(iweights,iatoms);
     snew(diff,iatoms);
     
-    // Initialize nweights to zeros.
+    // Initialize nweights to zeros. Redundant.
     for (i=0; i<natoms; i++)
     {
         nweights[i] = 0;
@@ -539,30 +566,210 @@ int gmx_isdcalc(int argc,char *argv[])
     // Create an array to hold all frames.
     snew(frames,nframes);
     
-    /* Create arrays to hold output per frame.
-     */
-    snew(avgdiff,nframes);
-    snew(maxdiff,nframes);
-    snew(maxframe,nframes);
-    // Only allocate if variance is being calculated.
-    if (bVar)
+    
+    // Load first frame to x variable.
+    natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
+    
+    // This is for removing periodic boundary conditions.
+    gpbc = gmx_rmpbc_init(&top.idef, ePBC, natoms, box);
+    
+    // For -ref option, only do this loop.
+    if (bRef)
     {
-        snew(vardiff, nframes);
+        // Update the output.
+        fprintf(stderr,"\nCalculating ISD from reference structure.\n");
+        // Open output file.
+        out=xvgropen(opt2fn("-ref", NFILE, fnm), 
+                     "ISD Analysis", 
+                     "Reference Frame", 
+                     "Difference", 
+                     oenv);
+        
+        /* This section seems hacky since it is not based on all atoms.
+         * It might be better to close the trajectory, reload the tpr
+         * structure to x, and save the preprocessed frame in this section.
+         * However, the trajectory would have to be reopened. This could be
+         * slower and would leave strange output at the command line.
+         */
+        // Removes periodic boundary conditions from topframe.
+        gmx_rmpbc(gpbc, iatoms, box, topframe);
+        // Centers topframe.
+        reset_x(iatoms, NULL, iatoms, NULL, topframe, iweights);
+        
+        // Calculation loop for -ref option.
+        do
+        {
+            // Remove periodic boundary conditions from x.
+            gmx_rmpbc(gpbc, natoms, box, x);
+            // Centers x. The NULL arguments are necessary to fit based on subset.
+            reset_x(natoms, NULL, natoms, NULL, x, nweights);
+            // Save into trjframe.
+            for (j = 0; j < iatoms; j++)
+            {
+                copy_rvec(x[(int)index[j]], trjframe[j]);
+            }
+            
+            
+            /* In this section, we'll put calls to all of the ISDMs.
+             * 
+             * Each should have its own if statement, so it is only executed
+             * if that option is specified at the command line.
+             * 
+             * This function doesn't use the output stored in diff.
+             */
+            
+            // Copy ith frame.
+            if (bRROT)
+            {
+                // Make a copy of the ith frame.
+                copy_rvecn(topframe, iframe, 0, iatoms);
+                rframe = iframe;
+            }
+            else
+            {
+                rframe = topframe;
+            }
+                
+            // Fit the jth frame.
+            if (bFit)
+            {
+                // Need to make a copy of the fit frame or bad stuff will happen.
+                copy_rvecn(trjframe, jframe, 0, iatoms);
+                // Aligns jframe to current reference frame.
+                do_fit(iatoms, iweights, topframe, jframe);
+                cframe = jframe;
+            }
+            else
+            {
+                cframe = trjframe;
+            }
+            
+            // Calls most ISDM options.
+            if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
+                bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
+                bPCOR || bACOR)
+            {
+                ISD = call_ISDM(iatoms, cframe, rframe, diff, ISDM);
+            }
+            
+            // RMSD with random rotation. User gives -rrot option.
+            if (bRROT)
+            {
+                // Solve for three random numbers.
+                for (k = 0; k < 3; k++)
+                {
+                    rrot_xyz[k] = 2.0 * pi * ((real)rand() / RAND_MAX) - pi;
+                }
+                // Create x, y, z rotation matrices and multiply.
+                clear_mat(rrotx);
+                clear_mat(rroty);
+                clear_mat(rrotz);
+                /*      Rx = rrotx[rows][cols]
+                 * 
+                 *      |   1.0   |   0.0   |   0.0   |
+                 * Rx = |   0.0   |  cos(x) |  sin(x) |
+                 *      |   0.0   | -sin(x) |  cos(x) |
+                 */
+                rrotx[0][0] = 1.0;
+                rrotx[1][1] = cos(rrot_xyz[0]);
+                rrotx[2][2] = rrotx[1][1];
+                rrotx[1][2] = sin(rrot_xyz[0]);
+                rrotx[2][1] = -1.0 * rrotx[1][2];
+                /*      Ry = rroty[rows][cols]
+                 * 
+                 *      |  cos(x) |   0.0   | -sin(x) |
+                 * Ry = |   0.0   |   1.0   |   0.0   |
+                 *      |  sin(x) |   0.0   |  cos(x) |
+                 */
+                rroty[1][1] = 1.0;
+                rroty[0][0] = cos(rrot_xyz[1]);
+                rroty[2][2] = rroty[0][0];
+                rroty[2][0] = sin(rrot_xyz[1]);
+                rroty[0][2] = -1.0 * rroty[2][0];
+                /*      Rz = rrotz[rows][cols]
+                 * 
+                 *      |  cos(x) |  sin(x) |   0.0   |
+                 * Rz = | -sin(x) |  cos(x) |   0.0   |
+                 *      |   0.0   |   0.0   |   1.0   |
+                 */
+                rrotz[2][2] = 1.0;
+                rrotz[0][0] = cos(rrot_xyz[2]);
+                rrotz[1][1] = rrotz[0][0];
+                rrotz[0][1] = sin(rrot_xyz[2]);
+                rrotz[1][0] = -1.0 * rrotz[0][1];
+                // Multiply rotation matrices.
+                mmul(rrotx, rroty, rrot);
+                copy_mat(rrot, rrotx);
+                mmul(rrotx, rrotz, rrot);
+                // Apply random rotation.
+                for (k = 0; k < iatoms; k++)
+                {
+                    for (m = 0; m < 3; m++)
+                    {
+                        xold[m] = rframe[k][m];
+                    }
+                    for (m = 0; m < 3; m++)
+                    {
+                        rframe[k][m] = 0;
+                        for (n = 0; n < 3; n++)
+                        {
+                            rframe[k][m] += rrot[m][n] * xold[n];
+                        }
+                    }
+                }
+                // Calculate RMSD after rotation.
+                ISD = sqrt(calc_msd(iatoms, cframe, rframe, diff));
+            }
+            
+            // MAMMOTH. User gives -mammoth option.
+            if (bMAMMOTH)
+            {
+                // Calculate MAMMOTH comparison.
+                ISD = calc_mammoth(iatoms, cframe, rframe, rnum);
+            }
+            
+            // ESA.
+            if (bESA)
+            {
+                // Calculate ESA comparison.
+                ISD = calc_esa(iatoms, cframe, rframe);
+            }
+            
+            
+            // Output result to file.
+            fprintf(out,"%10f %10f \n", t, ISD);
+            
+        } while(read_next_x(oenv, status, &t, natoms, x, box));
+        // Close trajectory and output files.
+        close_trj(status);
+        ffclose(out);
+        
+        // Check to see if any other output options were chosen.
+        if (!(bMean || bVar || bMax || bPair))
+        {
+            // No other options chosen, so end the program.
+            // Closes the thing that removes periodic boundary conditions.
+            gmx_rmpbc_done(gpbc);
+            
+            // Closing.
+            thanx(stderr);
+            return 0;
+        }
+        else
+        {
+            // If other output options chosen, reopen the trajectory file.
+            natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
+        }
     }
     
-    
-    
+    // For other options, load trajectory into memory.
     /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
      * 
      * Not sure which argument determines which atoms to pull info for.
      */
     fprintf(stderr,"\nStoring trajectory to memory.\n");
-    natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
-    
     // Initialize index to keep track of current frame.
     i = 0;
-    // This is for removing periodic boundary conditions.
-    gpbc = gmx_rmpbc_init(&top.idef, ePBC, natoms, box);
     do
     {
         // Set aside new memory to store this frame.
@@ -584,21 +791,33 @@ int gmx_isdcalc(int argc,char *argv[])
     // Closes the thing that removes periodic boundary conditions.
     gmx_rmpbc_done(gpbc);
     
+    
+    /* Create arrays to hold output per frame.
+     */
+    snew(avgdiff,nframes);
+    snew(maxdiff,nframes);
+    snew(maxframe,nframes);
+    // Only allocate if variance is being calculated.
+    if (bVar)
+    {
+        snew(vardiff, nframes);
+    }
     // Initialize output to 0.
     maxISD = 0;
     avgISD = 0;
     
     
+    
     /* Main calculation loop.
      */
     fprintf(stderr,"\nCalculating results. \n");
+    pcalcs = 1;
     
     /* Originally this was designed to only loop through each pair of i and j
      * one time to save half of the calculations. Eventually it became 
      * impractical to make sure that each ISDM was symmetric, so now the
      * algorithm takes the performance hit in favor of accuracy and simplicity.
      */
-    pcalcs = 1;
     
     // Loop through reference frames.
     for (i = (bf - 1); i < ef; i++)
