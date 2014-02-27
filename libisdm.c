@@ -71,6 +71,54 @@ real calc_drms(int iatoms,rvec frame[],rvec rframe[],real drms[])
             // Find the length of the vector made by every pair of atoms.
             ileg = distance2(frame[i],frame[j]);
             rleg = distance2(rframe[i],rframe[j]);
+            // Find difference in the distances between the pair of atoms.
+            diff_leg = sqrt(ileg) - sqrt(rleg);
+            // Update the sum by squaring the difference.
+            drms[i] += diff_leg * diff_leg;
+        }
+        // Normalize the sum by the number of differences.
+        drms[i] /= (iatoms-1);
+        // Takes the square root.
+        drms[i] = sqrt(drms[i]);
+        // Update the main sum.
+        sum_dist += drms[i];
+    }
+    
+    // First, normalize by the number of summed differences.
+    sum_dist /= iatoms;
+    // Output.
+    return sum_dist;
+}
+
+
+
+real calc_sdrms(int iatoms,rvec frame[],rvec rframe[],real drms[])
+{
+    int i,j;
+    real ileg,rleg,diff_leg,sum_dist,Rgi,Rgr,Rg2;
+    
+    // Don't assume that drms is zeros already.
+    for (i=0; i < iatoms; i++)
+    {
+        drms[i] = 0.0;
+    }
+    
+    //Normalization
+    Rgi = 0.0;
+    Rgr = 0.0;
+    // Final sum.
+    sum_dist = 0.0;
+    // Loop through each atom.
+    for (i=0; i < iatoms; i++)
+    {
+        // Compare to every other atom.
+        for (j=0; j < iatoms; j++)
+        {
+            // It makes sense to skip i==j, but it is zero and is simpler to leave.
+            
+            // Find the length of the vector made by every pair of atoms.
+            ileg = distance2(frame[i],frame[j]);
+            rleg = distance2(rframe[i],rframe[j]);
             // Normalization
             Rgi += ileg;
             Rgr += rleg;
@@ -1107,6 +1155,13 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], real diff[],
     // Atom to atom distances. User gives -drms option.
     if (strcmp(ISDM, "DRMS") == 0)
     {
+        // Calculate differences in all atom to atom distances.
+        return calc_drms(iatoms,cframe,rframe,diff);
+    }
+    
+    // Atom to atom distances. User gives -sdrms option.
+    if (strcmp(ISDM, "SDRMS") == 0)
+    {
         /* Calculate differences in all atom to atom distances.
          * 
          * Scaled by 2 * sqrt(Rgi * Rgj).
@@ -1115,7 +1170,7 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], real diff[],
          * necessary info to calculate Rgi needs to be calculated
          * for every comparison anyway.
          */
-        return calc_drms(iatoms,cframe,rframe,diff);
+        return calc_sdrms(iatoms,cframe,rframe,diff);
     }
     
     // Position correlation. User gives -pcor option.

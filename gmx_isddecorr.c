@@ -56,7 +56,7 @@ int gmx_isddecorr(int argc,char *argv[])
     static gmx_bool bPHIPSI=FALSE, bSRMS=FALSE, bPCOR=FALSE, bMAMMOTH=FALSE;
     static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
-    static gmx_bool bRROT=FALSE;
+    static gmx_bool bRROT=FALSE, bSDRMS=FALSE;
     static real user_td = -1;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
@@ -71,8 +71,12 @@ int gmx_isddecorr(int argc,char *argv[])
         "ISDM: Mean cosine of difference of phi and psi angles. "
         "Assumes only backbone atoms." },
         { "-drms", FALSE, etBOOL, {&bDRMS},
-        "ISDM: Mean difference of the paired distances matrix for "
-        "all atoms. Distance RMS(D)" },
+            "ISDM: Mean difference of the paired distances matrix for all "
+            "atoms. Distance RMS(D)." },
+        { "-sdrms", FALSE, etBOOL, {&bSDRMS},
+            "ISDM: Mean difference of the paired distances matrix for all "
+            "atoms scaled by 2 * geometric mean of Rg. Scaled distance "
+            "RMS(D)." },
         { "-rg", FALSE, etBOOL, {&bRG},
         "ISDM: Calculates difference in Rg. Only compares size. " },
         { "-srg", FALSE, etBOOL, {&bSRG},
@@ -181,7 +185,7 @@ int gmx_isddecorr(int argc,char *argv[])
     // If there are no options at command line, do default behavior.
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
-              bSE2E || bMIR || bRROT);
+              bSE2E || bMIR || bRROT || bSDRMS);
     
     bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
     
@@ -220,6 +224,13 @@ int gmx_isddecorr(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing distance RMS as ISDM.\n");
         ISDM = "DRMS";
+        noptions++;
+    }
+    
+    if (bSDRMS)
+    {
+        fprintf(stderr,"\nUsing scaled distance RMS as ISDM.\n");
+        ISDM = "SDRMS";
         noptions++;
     }
     
@@ -576,7 +587,7 @@ int gmx_isddecorr(int argc,char *argv[])
                 // Calls most ISDM options.
                 if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                     bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                    bPCOR || bACOR)
+                    bSDRMS || bPCOR || bACOR)
                 {
                     ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
                 }
@@ -786,7 +797,7 @@ int gmx_isddecorr(int argc,char *argv[])
                 // Calls most ISDM options.
                 if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                     bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                    bPCOR || bACOR)
+                    bSDRMS || bPCOR || bACOR)
                 {
                     ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
                 }
@@ -1142,7 +1153,7 @@ int gmx_isddecorr(int argc,char *argv[])
             // Calls most ISDM options.
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                bPCOR || bACOR)
+                bSDRMS || bPCOR || bACOR)
             {
                 ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
             }

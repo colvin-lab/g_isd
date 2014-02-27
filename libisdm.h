@@ -39,6 +39,8 @@
 
 extern real calc_drms(int iatoms, rvec frame[], rvec rframe[], real drms[]);
 
+extern real calc_sdrms(int iatoms, rvec frame[], rvec rframe[], real drms[]);
+
 extern real calc_rg(int iatoms, rvec frame[]);
 
 extern real calc_ang(int iatoms, rvec frame[], rvec rframe[], real ang[]);
