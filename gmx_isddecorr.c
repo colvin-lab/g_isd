@@ -40,14 +40,20 @@ int gmx_isddecorr(int argc,char *argv[])
         "[TT]g_isddecorr[tt] measures the mean interstructure ",
         "distance (ISD) for all structures separated by each dt. Options ",
         "scaled and mscaled divide the decorrelation results by the mean ",
-        "and max ISD respectively. Option ddecorr measures the mean ratio of ",
-        "derivatives for all structures separated by each dt. The double ",
-        "is similar in purpose to ddecorr, but the calculation is more ",
-        "to performing a second decorrelation on the original output data. ",
+        "and max ISD respectively. ",
+        "Optional output maxdecorr solves for the maximum ISD at each dt. ",
+        "Optional output mindecorr solves for the minimum ISD at each dt. ",
+        "Optional output ddecorr measures the mean ratio of derivatives for ",
+        "all structures separated by each dt. "
+        "Optional output double is similar in purpose to ddecorr, but the ",
+        "calculation is similar to performing a second decorrelation on ",
+        "the original decorrelation output data. ",
         "Option tdo calculates the difference between paired structures ",
-        "separated by td time. The method used to compare each pair of "
-        "structures is chosen by a variety of ISDMs chosen by flags at the "
-        "command line. Only one ISDM can be chosen at a time."
+        "separated by td time. The method used to compare each pair of ",
+        "structures is chosen by a variety of ISDMs chosen by flags at the ",
+        "command line. Only one ISDM can be chosen at a time. ",
+        "The maximum dt in the output is one half the length of the ",
+        "simulation length. "
     };
     
     
@@ -69,7 +75,7 @@ int gmx_isddecorr(int argc,char *argv[])
         "ISDM: Geometric mean of ang and dih ISDMs." },
         { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
         "ISDM: Mean cosine of difference of phi and psi angles. "
-        "Assumes only backbone atoms." },
+        "Assumes only uncapped backbone atoms." },
         { "-drms", FALSE, etBOOL, {&bDRMS},
             "ISDM: Mean difference of the paired distances matrix for all "
             "atoms. Distance RMS(D)." },
@@ -137,12 +143,12 @@ int gmx_isddecorr(int argc,char *argv[])
     rvec       **frames;
     real       *nweights, *iweights;
     real       ISD, sumISD, avgISD, maxISD, decorri, sumdn;
-    real       *diff, *decorr, *decorr2, *snr, *td;
+    real       *diff, *decorr, *decorr2, *mindecorr, *maxdecorr, *snr, *td;
     matrix     box, rrot, rrotx, rroty, rrotz;
     real       t, t1, t2, dt, dm, dn, rgi, rgj, pi = 3.14159265358979;
     int        *rnum, *nsum, noptions, pcalcs, nsums;
     int        i, j, k, m, n, ij, mn, df, iatoms, natoms, nframes, nf2, nf4;
-    gmx_bool   bDFLT, bFit;
+    gmx_bool   bDFLT, bFit, bMinDecorr, bMaxDecorr;
     gmx_bool   bDecorr, bdDecorr, bScaled, bMScaled, bDouble, bSNR, bTD;
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -151,16 +157,18 @@ int gmx_isddecorr(int argc,char *argv[])
     const char *leg[]  = { "Decorrelation", "Overall Mean" }; 
     #define NLEG asize(leg) 
     t_filenm fnm[] = {
-        { efTRX, "-f",       NULL,      ffREAD },
-        { efTPS, NULL,       NULL,      ffREAD },
-        { efNDX, NULL,       NULL,      ffOPTRD },
-        { efXVG, "-decorr",  "decorr",  ffOPTWR },
-        { efXVG, "-ddecorr", "ddecorr", ffOPTWR },
-        { efXVG, "-scaled",  "scaled",  ffOPTWR },
-        { efXVG, "-mscaled", "mscaled", ffOPTWR },
-        { efXVG, "-snr",     "snr",     ffOPTWR },
-        { efXVG, "-tdo",     "td",      ffOPTWR },
-        { efXVG, "-double",  "double",  ffOPTWR }, 
+        { efTRX, "-f",         NULL,        ffREAD },
+        { efTPS, NULL,         NULL,        ffREAD },
+        { efNDX, NULL,         NULL,        ffOPTRD },
+        { efXVG, "-decorr",    "decorr",    ffOPTWR },
+        { efXVG, "-mindecorr", "mindecorr", ffOPTWR },
+        { efXVG, "-maxdecorr", "maxdecorr", ffOPTWR },
+        { efXVG, "-ddecorr",   "ddecorr",   ffOPTWR },
+        { efXVG, "-scaled",    "scaled",    ffOPTWR },
+        { efXVG, "-mscaled",   "mscaled",   ffOPTWR },
+        { efXVG, "-snr",       "snr",       ffOPTWR },
+        { efXVG, "-tdo",       "td",        ffOPTWR },
+        { efXVG, "-double",    "double",    ffOPTWR }, 
     }; 
     #define NFILE asize(fnm)
     int npargs;
@@ -429,13 +437,15 @@ int gmx_isddecorr(int argc,char *argv[])
     }
     
     // Output which graphs?
-    bDecorr  = opt2bSet("-decorr",  NFILE, fnm);
-    bdDecorr = opt2bSet("-ddecorr", NFILE, fnm);
-    bScaled  = opt2bSet("-scaled",  NFILE, fnm);
-    bMScaled = opt2bSet("-mscaled", NFILE, fnm);
-    bSNR     = opt2bSet("-snr",     NFILE, fnm);
-    bTD      = opt2bSet("-tdo",     NFILE, fnm);
-    bDouble  = opt2bSet("-double",  NFILE, fnm);
+    bDecorr    = opt2bSet("-decorr",    NFILE, fnm);
+    bMinDecorr = opt2bSet("-mindecorr", NFILE, fnm);
+    bMaxDecorr = opt2bSet("-maxdecorr", NFILE, fnm);
+    bdDecorr   = opt2bSet("-ddecorr",   NFILE, fnm);
+    bScaled    = opt2bSet("-scaled",    NFILE, fnm);
+    bMScaled   = opt2bSet("-mscaled",   NFILE, fnm);
+    bSNR       = opt2bSet("-snr",       NFILE, fnm);
+    bTD        = opt2bSet("-tdo",       NFILE, fnm);
+    bDouble    = opt2bSet("-double",    NFILE, fnm);
     
     
     /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
@@ -494,6 +504,13 @@ int gmx_isddecorr(int argc,char *argv[])
     nf2 = nframes / 2;
     // Arrays to store decorrelation information.
     snew(decorr, (nf2 + 1));
+    snew(mindecorr, (nf2 + 1));
+    snew(maxdecorr, (nf2 + 1));
+    for (i = 1; i <= nf2; i++)
+    {
+        // Initial values for mindecorr.
+        mindecorr[i] = 1000000000;
+    }
     // Create an array to hold all frames.
     snew(frames, nframes);
     
@@ -732,7 +749,7 @@ int gmx_isddecorr(int argc,char *argv[])
      * The output for the double option does not occur here, but the data in 
      * the decorr array must be calculated. The same for the ddecorr option.
      */
-    if (bDecorr || bScaled || bMScaled || bDouble || bdDecorr)
+    if (bDecorr || bMinDecorr || bMaxDecorr || bScaled || bMScaled || bDouble || bdDecorr)
     {
         /* Main calculation loop.
          */
@@ -890,6 +907,15 @@ int gmx_isddecorr(int argc,char *argv[])
                 {
                     // This stores the decorrelation information.
                     decorr[ij] += ISD;
+                    // Max and min decorrelation information.
+                    if (ISD > maxdecorr[ij])
+                    {
+                        maxdecorr[ij] = ISD;
+                    }
+                    if (ISD < mindecorr[ij])
+                    {
+                        mindecorr[ij] = ISD;
+                    }
                 }
                 // Using this to get the average difference.
                 sumISD += ISD;
@@ -1018,6 +1044,56 @@ int gmx_isddecorr(int argc,char *argv[])
                 fprintf(out,"%10f %10f \n", 
                         (dt * i) / 1000.0, 
                         decorr[i]);
+            }
+            // Close the output file.
+            ffclose(out);
+        }
+        
+        // Output decorrelation.
+        if (bMinDecorr)
+        {
+            // Necessary to output to xvg format. Sets up the header.
+            out=xvgropen(opt2fn("-mindecorr", NFILE, fnm), 
+                         "Decorrelation of Minimum ISD Values", 
+                         "Time Difference, Delta T (ns)", 
+                         "Minimum Difference at Delta T", 
+                         oenv);
+            
+            // Sets up the legend for the xvg file.
+            //xvgr_legend(out,NLEG,leg,oenv);
+            
+            // Process decorrelation information.
+            for (i = 0; i <= nf2; i++)
+            {
+                // Print output.
+                fprintf(out,"%10f %10f \n", 
+                        (dt * i) / 1000.0, 
+                        mindecorr[i]);
+            }
+            // Close the output file.
+            ffclose(out);
+        }
+        
+        // Output decorrelation.
+        if (bMaxDecorr)
+        {
+            // Necessary to output to xvg format. Sets up the header.
+            out=xvgropen(opt2fn("-maxdecorr", NFILE, fnm), 
+                         "Decorrelation of Maximum ISD Values", 
+                         "Time Difference, Delta T (ns)", 
+                         "Maximum Difference at Delta T", 
+                         oenv);
+            
+            // Sets up the legend for the xvg file.
+            //xvgr_legend(out,NLEG,leg,oenv);
+            
+            // Process decorrelation information.
+            for (i = 0; i <= nf2; i++)
+            {
+                // Print output.
+                fprintf(out,"%10f %10f \n", 
+                        (dt * i) / 1000.0, 
+                        maxdecorr[i]);
             }
             // Close the output file.
             ffclose(out);
