@@ -506,7 +506,7 @@ int gmx_isddecorr(int argc,char *argv[])
     snew(decorr, (nf2 + 1));
     snew(mindecorr, (nf2 + 1));
     snew(maxdecorr, (nf2 + 1));
-    for (i = 1; i <= nf2; i++)
+    for (i = 0; i <= nf2; i++)
     {
         // Initial values for mindecorr.
         mindecorr[i] = 1000000000;
@@ -1020,8 +1020,17 @@ int gmx_isddecorr(int argc,char *argv[])
                 }
                 // Calculate RMSD after rotation.
                 ISD = sqrt(calc_msd(iatoms, jframe, iframe, diff));
-                decorr[0] = ISD;
+                decorr[0] += ISD;
+                if (ISD < mindecorr[0])
+                {
+                    mindecorr[0] = ISD;
+                }
+                if (ISD > maxdecorr[0])
+                {
+                    maxdecorr[0] = ISD;
+                }
             }
+            decorr[0] /= nframes;
         }
         
         // Output decorrelation.
