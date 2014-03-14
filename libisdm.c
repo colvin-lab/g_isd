@@ -78,16 +78,19 @@ real calc_drms(int iatoms,rvec frame[],rvec rframe[],real drms[])
         }
         // Normalize the sum by the number of differences.
         drms[i] /= (iatoms-1);
-        // Takes the square root.
-        drms[i] = sqrt(drms[i]);
         // Update the main sum.
         sum_dist += drms[i];
     }
     
-    // First, normalize by the number of summed differences.
+    // Normalize by the number of summed differences.
     sum_dist /= iatoms;
+    // Take the root for each atom.
+    for (i = 0; i < iatoms; i++)
+    {
+        drms[i] = sqrt(drms[i]);
+    }
     // Output.
-    return sum_dist;
+    return sqrt(sum_dist);
 }
 
 
@@ -129,8 +132,6 @@ real calc_sdrms(int iatoms,rvec frame[],rvec rframe[],real drms[])
         }
         // Normalize the sum by the number of differences.
         drms[i] /= (iatoms-1);
-        // Takes the square root.
-        drms[i] = sqrt(drms[i]);
         // Update the main sum.
         sum_dist += drms[i];
     }
@@ -141,7 +142,9 @@ real calc_sdrms(int iatoms,rvec frame[],rvec rframe[],real drms[])
     Rg2 = 2 * sqrt(Rgi*Rgr);
     // First, normalize by the number of summed differences.
     sum_dist /= iatoms;
-    // Second, scale by the molecule size. Uses twice the geometric mean of Rg's.
+    // Second, take the root.
+    sum_dist = sqrt(sum_dist);
+    // Third, sqrt and scale by the molecule size. Twice the geometric mean Rg.
     sum_dist /= Rg2;
     // Expected output is between 0 and 1, but the scaling allows for a small
     // chance of an output being >1. This would be undesirable.
@@ -152,6 +155,7 @@ real calc_sdrms(int iatoms,rvec frame[],rvec rframe[],real drms[])
     // Repeat per atom.
     for (i=0; i<iatoms; i++)
     {
+        drms[i] = sqrt(drms[i]);
         drms[i] /= Rg2;
         if (drms[i] > 1.0)
         {

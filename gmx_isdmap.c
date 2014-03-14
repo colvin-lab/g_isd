@@ -963,12 +963,12 @@ int gmx_isdmap(int argc,char *argv[])
         // Write output.
         for (i = 0; i < nframes; i++)
         {
-            fprintf(out, "%10f", outmat[i][0]);
+            fprintf(out, "%12.8f", outmat[i][0]);
             for (j = 1; j < nframes; j++)
             {
-                fprintf(out, ", %10f", outmat[i][j]);
+                fprintf(out, ",%12.8f", outmat[i][j]);
             }
-            fprintf(out, " \n");
+            fprintf(out, "\n");
         }
         
         // Close the output file.
