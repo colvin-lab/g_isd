@@ -62,20 +62,27 @@ int gmx_isddecorr(int argc,char *argv[])
     static gmx_bool bPHIPSI=FALSE, bSRMS=FALSE, bPCOR=FALSE, bMAMMOTH=FALSE;
     static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
+    static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE;
     static real user_td = -1;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
-        "ISDM: Mean cosine of difference of backbone angles for each "
-        "set of three atoms. Assumes only CA atoms." },
+            "ISDM: Mean cosine of difference of backbone angles for each "
+            "set of three atoms. Assumes only CA atoms." },
         { "-dih", FALSE, etBOOL, {&bDIH},
-        "ISDM: Mean cosine of difference of backbone dihedrals for "
-        "each set of four atoms. Assumes only CA atoms." },
+            "ISDM: Mean cosine of difference of backbone dihedrals for "
+            "each set of four atoms. Assumes only CA atoms." },
         { "-angdih", FALSE, etBOOL, {&bANGDIH},
-        "ISDM: Geometric mean of ang and dih ISDMs." },
+            "ISDM: Geometric mean of ang and dih measures." },
+        { "-ang2", FALSE, etBOOL, {&bANG2},
+            "ISDM: Attempts to euclideanize -ang." },
+        { "-dih2", FALSE, etBOOL, {&bDIH2},
+            "ISDM: Attempts to euclideanize -dih." },
+        { "-angdih2", FALSE, etBOOL, {&bANGDIH2},
+            "ISDM: Attempts to euclideanize -angdih." },
         { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
-        "ISDM: Mean cosine of difference of phi and psi angles. "
-        "Assumes only uncapped backbone atoms." },
+            "ISDM: Mean cosine of difference of phi and psi angles. "
+            "Assumes only backbone atoms." },
         { "-drms", FALSE, etBOOL, {&bDRMS},
             "ISDM: Mean difference of the paired distances matrix for all "
             "atoms. Distance RMS(D)." },
@@ -84,51 +91,51 @@ int gmx_isddecorr(int argc,char *argv[])
             "atoms scaled by 2 * geometric mean of Rg. Scaled distance "
             "RMS(D)." },
         { "-rg", FALSE, etBOOL, {&bRG},
-        "ISDM: Calculates difference in Rg. Only compares size. " },
+            "ISDM: Calculates difference in Rg. Only compares size. " },
         { "-srg", FALSE, etBOOL, {&bSRG},
-        "ISDM: Calculates difference in Rg scaled by mean Rg. " },
+            "ISDM: Calculates difference in Rg scaled by mean Rg. " },
         { "-e2e", FALSE, etBOOL, {&bE2E},
-        "ISDM: Calculates difference in end-to-end distance. " },
+            "ISDM: Calculates difference in end-to-end distance. " },
         { "-se2e", FALSE, etBOOL, {&bSE2E},
-        "ISDM: Calculates difference in end-to-end distance scaled "
-        "by (2 * Rg). " },
+            "ISDM: Calculates difference in end-to-end distance scaled "
+            "by (2 * Rg). " },
         { "-mir", FALSE, etBOOL, {&bMIR},
-        "ISDM: RMSD with the mirror of the reference structure. " },
+            "ISDM: RMSD with the mirror of the reference structure. " },
         { "-rrot", FALSE, etBOOL, {&bRROT},
-        "ISDM: RMSD with random rotation of reference structure. " },
+            "ISDM: RMSD with random rotation of reference structure. " },
         { "-srms", FALSE, etBOOL, {&bSRMS},
-        "ISDM: Scaled RMSD. RMSD between the structure and reference "
-        "divided by the RMSD between the structure and mirror of the "
-        "reference created by multiplying the coordinates by the "
-        "negative identity matrix." },
+            "ISDM: Scaled RMSD. RMSD between the structure and reference "
+            "divided by the RMSD between the structure and mirror of the "
+            "reference created by multiplying the coordinates by the "
+            "negative identity matrix." },
         { "-rmsd", FALSE, etBOOL, {&bRMSD},
-        "ISDM: Standard RMSD." },
+            "ISDM: Standard RMSD." },
         { "-pcor", FALSE, etBOOL, {&bPCOR},
-        "ISDM: Position correlation. Correlation coefficient of the "
-        "positions is computed after alignment. Only positive "
-        "correlation is considered. Negative correlations are set to "
-        "zero." },
+            "ISDM: Position correlation. Correlation coefficient of the "
+            "positions is computed after alignment. Only positive "
+            "correlation is considered. Negative correlations are set to "
+            "zero." },
         { "-acor", FALSE, etBOOL, {&bACOR},
-        "ISDM: Angle correlation. Correlation coefficient of the "
-        "backbone angles (see ang ISDM) is computed. "
-        "Only positive correlation is considered. Negative correlations "
-        "are set to zero." },
+            "ISDM: Angle correlation. Correlation coefficient of the "
+            "backbone angles (see ang measure) is computed. "
+            "Only positive correlation is considered. Negative correlations "
+            "are set to zero." },
 //         { "-mammoth", FALSE, etBOOL, {&bMAMMOTH},
-//         "ISDM: MAMMOTH (MAtching Molecular Models Obtained from "
-//         "Theory). Compares segments of residues chosen by sequence "
-//         "alignment. Attempts to focus on correct secondary structure "
-//         "moreso than tertiary structure. Source code modified for "
-//         "compatibility. For this ISDM, please cite: \n\n"
-//         "Ortiz, AR, Strauss, CE, Olmea, O (2002). MAMMOTH "
-//         "(Matching molecular models obtained from theory): An automated "
-//         "method for model comparison. Protein Sci. 11 (11), 2606–2621.\n"},
+//             "ISDM: MAMMOTH (MAtching Molecular Models Obtained from "
+//             "Theory). Compares segments of residues chosen by sequence "
+//             "alignment. Attempts to focus on correct secondary structure "
+//             "moreso than tertiary structure. Source code modified for "
+//             "compatibility. For this measure, please cite: \n\n"
+//             "Ortiz, AR, Strauss, CE, Olmea, O (2002). MAMMOTH "
+//             "(Matching molecular models obtained from theory): An automated "
+//             "method for model comparison. Protein Sci. 11 (11), 2606–2621.\n"},
         { "-esa", FALSE, etBOOL, {&bESA},
-        "ISDM: Elastic shape analysis. Based on image analysis. "
-        "Warps structure onto the reference structure. Original source "
-        "code ported from Matlab to C. For this ISDM, please cite: \n\n"
-        "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
-        "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
-        "e1001075.\n\nAssumes only CA atoms." },
+            "ISDM: Elastic shape analysis. Based on image analysis. "
+            "Warps structure onto the reference structure. Original source "
+            "code ported from Matlab to C. For this measure, please cite: \n\n"
+            "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
+            "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
+            "e1001075.\n\nAssumes only CA atoms." },
         { "-td", FALSE, etREAL, {&user_td},
         "Time difference used for -tdo output." },
     };
@@ -193,7 +200,7 @@ int gmx_isddecorr(int argc,char *argv[])
     // If there are no options at command line, do default behavior.
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
-              bSE2E || bMIR || bRROT || bSDRMS);
+              bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || bANGDIH2);
     
     bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
     
@@ -218,6 +225,20 @@ int gmx_isddecorr(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing backbone dihedrals as ISDM.\n");
         ISDM = "DIH";
+        noptions++;
+    }
+    
+    if (bANG2)
+    {
+        fprintf(stderr,"\nUsing backbone angles as ISDM.\n");
+        ISDM = "ANG2";
+        noptions++;
+    }
+    
+    if (bDIH2)
+    {
+        fprintf(stderr,"\nUsing backbone dihedrals as ISDM.\n");
+        ISDM = "DIH2";
         noptions++;
     }
     
@@ -302,6 +323,13 @@ int gmx_isddecorr(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
         ISDM = "ANGDIH";
+        noptions++;
+    }
+    
+    if (bANGDIH2)
+    {
+        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
+        ISDM = "ANGDIH2";
         noptions++;
     }
     
@@ -604,9 +632,9 @@ int gmx_isddecorr(int argc,char *argv[])
                 // Calls most ISDM options.
                 if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                     bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                    bSDRMS || bPCOR || bACOR)
+                    bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2)
                 {
-                    ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
+                    ISD = call_ISDM(iatoms, jframe, iframe, ISDM);
                 }
                 
                 // RMSD with random rotation. User gives -rrot option.
@@ -675,7 +703,7 @@ int gmx_isddecorr(int argc,char *argv[])
                         }
                     }
                     // Calculate RMSD after rotation.
-                    ISD = sqrt(calc_msd(iatoms, jframe, iframe, diff));
+                    ISD = sqrt(calc_msd(iatoms, jframe, iframe));
                 }
                 
                 // MAMMOTH. User gives -mammoth option.
@@ -814,9 +842,9 @@ int gmx_isddecorr(int argc,char *argv[])
                 // Calls most ISDM options.
                 if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                     bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                    bSDRMS || bPCOR || bACOR)
+                    bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2)
                 {
-                    ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
+                    ISD = call_ISDM(iatoms, jframe, iframe, ISDM);
                 }
                 
                 // RMSD with random rotation. User gives -rrot option.
@@ -885,7 +913,7 @@ int gmx_isddecorr(int argc,char *argv[])
                         }
                     }
                     // Calculate RMSD after rotation.
-                    ISD = sqrt(calc_msd(iatoms, jframe, iframe, diff));
+                    ISD = sqrt(calc_msd(iatoms, jframe, iframe));
                 }
                 
                 // MAMMOTH. User gives -mammoth option.
@@ -1019,7 +1047,7 @@ int gmx_isddecorr(int argc,char *argv[])
                     }
                 }
                 // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, jframe, iframe, diff));
+                ISD = sqrt(calc_msd(iatoms, jframe, iframe));
                 decorr[0] += ISD;
                 if (ISD < mindecorr[0])
                 {
@@ -1238,9 +1266,9 @@ int gmx_isddecorr(int argc,char *argv[])
             // Calls most ISDM options.
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                bSDRMS || bPCOR || bACOR)
+                bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2)
             {
-                ISD = call_ISDM(iatoms, jframe, iframe, diff, ISDM);
+                ISD = call_ISDM(iatoms, jframe, iframe, ISDM);
             }
             
             // RMSD with random rotation. User gives -rrot option.
@@ -1309,7 +1337,7 @@ int gmx_isddecorr(int argc,char *argv[])
                     }
                 }
                 // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, jframe, iframe, diff));
+                ISD = sqrt(calc_msd(iatoms, jframe, iframe));
             }
             
             // MAMMOTH. User gives -mammoth option.

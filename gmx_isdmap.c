@@ -231,6 +231,7 @@ int gmx_isdmap(int argc,char *argv[])
     static gmx_bool bPHIPSI=FALSE, bSRMS=FALSE, bPCOR=FALSE, bMAMMOTH=FALSE;
     static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
+    static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE;
     static real setmax = -1;
     t_pargs pa[] = {
@@ -242,6 +243,12 @@ int gmx_isdmap(int argc,char *argv[])
             "each set of four atoms. Assumes only CA atoms." },
         { "-angdih", FALSE, etBOOL, {&bANGDIH},
             "ISDM: Geometric mean of ang and dih ISDMs." },
+        { "-ang2", FALSE, etBOOL, {&bANG2},
+            "ISDM: Attempts to euclideanize -ang." },
+        { "-dih2", FALSE, etBOOL, {&bDIH2},
+            "ISDM: Attempts to euclideanize -dih." },
+        { "-angdih2", FALSE, etBOOL, {&bANGDIH2},
+            "ISDM: Attempts to euclideanize -angdih." },
         { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
             "ISDM: Mean cosine of difference of phi and psi angles. "
             "Assumes only backbone atoms." },
@@ -359,7 +366,7 @@ int gmx_isdmap(int argc,char *argv[])
     // If there are no options at command line, do default behavior.
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
-              bSE2E || bMIR || bRROT || bSDRMS);
+              bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || bANGDIH2);
     
     bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
     
@@ -384,6 +391,20 @@ int gmx_isdmap(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing backbone dihedrals as ISDM.\n");
         ISDM = "DIH";
+        noptions++;
+    }
+    
+    if (bANG2)
+    {
+        fprintf(stderr,"\nUsing backbone angles as ISDM.\n");
+        ISDM = "ANG2";
+        noptions++;
+    }
+    
+    if (bDIH2)
+    {
+        fprintf(stderr,"\nUsing backbone dihedrals as ISDM.\n");
+        ISDM = "DIH2";
         noptions++;
     }
     
@@ -468,6 +489,13 @@ int gmx_isdmap(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
         ISDM = "ANGDIH";
+        noptions++;
+    }
+    
+    if (bANGDIH2)
+    {
+        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
+        ISDM = "ANGDIH2";
         noptions++;
     }
     
@@ -785,9 +813,9 @@ int gmx_isdmap(int argc,char *argv[])
             // Calls most ISDM options.
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
-                bSDRMS || bPCOR || bACOR)
+                bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2)
             {
-                ISD = call_ISDM(iatoms, cframe, rframe, diff, ISDM);
+                ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
             
             // RMSD with random rotation. User gives -rrot option.
@@ -856,7 +884,7 @@ int gmx_isdmap(int argc,char *argv[])
                     }
                 }
                 // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, cframe, rframe, diff));
+                ISD = sqrt(calc_msd(iatoms, cframe, rframe));
             }
             
             // MAMMOTH. User gives -mammoth option.

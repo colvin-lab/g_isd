@@ -37,28 +37,31 @@
 
 
 
-extern real calc_drms(int iatoms, rvec frame[], rvec rframe[], real drms[]);
+extern real calc_drms(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_sdrms(int iatoms, rvec frame[], rvec rframe[], real drms[]);
+extern real calc_sdrms(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_rg(int iatoms, rvec frame[]);
 
-extern real calc_ang(int iatoms, rvec frame[], rvec rframe[], real ang[]);
+extern real calc_ang(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_dih(int iatoms, rvec frame[], rvec rframe[], real dihs[]);
+extern real calc_dih(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_angdih(int iatoms, rvec frame[], rvec rframe[], 
-                        real angdih[]);
+extern real calc_angdih(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_phipsi(int iatoms, rvec frame[], rvec rframe[], 
-                        real phipsi[]);
+extern real calc_ang2(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_msd(int iatoms, rvec x[], rvec xref[], real msd[]);
+extern real calc_dih2(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_scaled_msd(int iatoms, rvec x[], rvec xref[], real msd[]);
+extern real calc_angdih2(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_mirror_msd(int iatoms, rvec frame[], rvec rframe[], 
-                            real mirror_msd[]);
+extern real calc_phipsi(int iatoms, rvec frame[], rvec rframe[]);
+
+extern real calc_msd(int iatoms, rvec x[], rvec xref[]);
+
+extern real calc_srms(int iatoms, rvec x[], rvec xref[]);
+
+extern real calc_mmsd(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_corr_atoms(int iatoms, rvec frame[], rvec rframe[]);
 
@@ -68,5 +71,4 @@ extern real calc_mammoth(int iatoms, rvec frame[], rvec rframe[], int *rnum);
 
 extern real calc_esa(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], real diff[], 
-                        const char *ISDM);
+extern real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM);
