@@ -428,6 +428,7 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
     double irang, irang2, sum_angs;
     real iang, rang;
     
+    sum_angs = 0.0;
     // There are n - 2 backbone angles.
     for (i = 1; i < (iatoms - 1); i++)
     {
@@ -445,7 +446,7 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
         rang   = gmx_angle(vec1, vec2);
         
         // Absolute value of the difference in angles.
-        irang  = iang - rang;
+        irang  = (double)(iang - rang);
         irang2 = irang * irang;
         
         // Update sum.
@@ -466,7 +467,7 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
         return 0.0;
     }
     // Finished.
-    return sum_angs;
+    return (real)sum_angs;
 }
 
 
