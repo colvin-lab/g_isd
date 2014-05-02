@@ -1052,7 +1052,7 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
     // Initializing variables.
     int i;
     double pi12 = 3.14159265359;
-    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs;
+    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
@@ -1150,30 +1150,21 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
     }
     
     // Divide by number of angles summed and take sqrt.
-    sum_angs  = sqrt(sum_angs / (iatoms - 2));
-    sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
+    sum_angdih  = sqrt((sum_angs + sum_dihs) / (2 * iatoms - 5));
     // Rescale from [0, pi] to [0, 1].
-    sum_angs /= pi12;
-    sum_dihs /= pi12;
+    sum_angdih /= pi12;
     // Boundary check.
-    if (sum_angs > 1.0)
+    if (sum_angdih > 1.0)
     {
-        sum_angs = 1.0;
+        return 1.0;
     }
-    else if (sum_angs < 0.0)
+    if (sum_angdih < 0.0)
     {
-        sum_angs = 0.0;
+        return 0.0;
     }
-    if (sum_dihs > 1.0)
-    {
-        sum_dihs = 1.0;
-    }
-    else if (sum_dihs < 0.0)
-    {
-        sum_dihs = 1.0;
-    }
-    // Return geometric mean.
-    return (real)sqrt(sum_angs * sum_dihs);
+    
+    // Output.
+    return (real)sum_angdih;
 }
 
 
