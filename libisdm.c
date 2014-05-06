@@ -278,7 +278,6 @@ real calc_ang(int iatoms, rvec frame[], rvec rframe[])
     double cosx, cosx2, cosy, cosy2, cosxy, sumcosxy;
     
     sumcosxy = 0.0;
-    
     // There are n - 2 backbone angles.
     for (i = 1; i < (iatoms - 1); i++)
     {
@@ -308,6 +307,15 @@ real calc_ang(int iatoms, rvec frame[], rvec rframe[])
          * cos(x) * cos(y) + sqrt(1 - (cos(x) ^ 2)) * sqrt(1 - (cos(y) ^ 2)) 
          */
         
+        // Need to check for numerical precision to avoid negative root.
+        if (cosx2 > 1.0)
+        {
+            cosx2 = 1.0;
+        }
+        if (cosy2 > 1.0)
+        {
+            cosy2 = 1.0;
+        }
         // This results in a number between -1.0 and +1.0.
         cosxy = cosx * cosy + sqrt(1.0 - cosx2) * sqrt(1.0 - cosy2);
         // Update sum.
@@ -318,17 +326,8 @@ real calc_ang(int iatoms, rvec frame[], rvec rframe[])
     sumcosxy /= (iatoms - 2);
     // Rescale from [+1.0, -1.0] to [0.0, 1.0].
     sumcosxy  = (sumcosxy - 1.0) / (-2.0);
-    // Boundary check.
-    if (sumcosxy > 1.0)
-    {
-        return 1.0;
-    }
-    if (sumcosxy < 0.0)
-    {
-        return 0.0;
-    }
     // Finished.
-    return sumcosxy;
+    return (real)sumcosxy;
 }
 
 
@@ -338,78 +337,68 @@ real calc_ang_n(int iatoms, rvec frame[], rvec rframe[], real ang[])
     // Error checking.
     if (iatoms < 4)
     {
-        // Not sure if this works. Depends on how FARGS works.
         gmx_fatal(FARGS, "Need at least 4 atoms in index group to use calc_ang.");
     }
     
     // Initializing variables.
     int i;
-    real sumcosxy,cosxy;
-    rvec vec1,vec2;
-    real cosx,cosx2,cosy,cosy2;
+    rvec vec1, vec2;
+    double cosx, cosx2, cosy, cosy2, cosxy, sumcosxy;
     
-    sumcosxy = 0.0;
-    
+    sumcosxy        = 0.0;
+    ang[0]          = 0.0;
+    ang[iatoms - 1] = 0.0;
     // There are n - 2 backbone angles.
     for (i = 1; i < (iatoms - 1); i++)
     {
         /* Find the value of cosx and cosy.
          * 
          * x is the angle of two vectors made by three atom coords
-         * in frame[]. y is the same for rframe[].
+         * in frame. y is the same for rframe.
          */
-        rvec_sub(frame[i-1],  frame[i], vec1);
-        rvec_sub(frame[i+1],  frame[i], vec2);
-        cosx = iprod(vec1, vec2) / (norm(vec1)*norm(vec2));
+        rvec_sub(frame[i - 1],  frame[i], vec1);
+        rvec_sub(frame[i + 1],  frame[i], vec2);
+        cosx  = cos_angle(vec1, vec2);
+        cosx2 = cosx * cosx;
         
-        rvec_sub(rframe[i-1], rframe[i], vec1);
-        rvec_sub(rframe[i+1], rframe[i], vec2);
-        cosy = iprod(vec1, vec2) / (norm(vec1)*norm(vec2));
+        rvec_sub(rframe[i - 1], rframe[i], vec1);
+        rvec_sub(rframe[i + 1], rframe[i], vec2);
+        cosy  = cos_angle(vec1, vec2);
+        cosy2 = cosy * cosy;
         
-        /* Find the value of cos(x-y) using trig identities.
+        /* Find the value of cos(x - y) using trig identities.
          * 
-         * cos(x-y) = cos(x)*cos(y) + sin(x)*sin(y)
+         * cos(x - y) = cos(x) * cos(y) + sin(x) * sin(y)
          * sin(x) = sin(acos(cos(x)))
-         * sin(acos(z)) = sqrt(1 - z^2)
+         * sin(acos(z)) = sqrt(1 - (z ^ 2))
          *
          * Therefore:
-         * cos(x-y) = 
-         * cos(x)*cos(y) + sqrt(1-(cos(x))^2)*sqrt(1-(cos(y))^2) 
+         * cos(x - y) = 
+         * cos(x) * cos(y) + sqrt(1 - (cos(x) ^ 2)) * sqrt(1 - (cos(y) ^ 2)) 
          */
-        // First check for boundary conditions.
-        cosx2 = cosx*cosx;
-        if (cosx2 >  1)
-        {
-            cosx2 =  1.0;
-        }
         
-        cosy2 = cosy*cosy;
-        if (cosy2 >  1)
+        // Need to check for numerical precision to avoid negative root.
+        if (cosx2 > 1.0)
         {
-            cosy2 =  1.0;
+            cosx2 = 1.0;
         }
-        
-        // This results in a number between -1 and +1.
-        cosxy = cosx*cosy + sqrt(1.0-cosx2)*sqrt(1.0-cosy2);
-        // Normalize to between 0 and 1.
-        cosxy = (cosxy - 1.0)/(-2.0);
-        // For average sum.
+        if (cosy2 > 1.0)
+        {
+            cosy2 = 1.0;
+        }
+        // This results in a number between -1.0 and +1.0.
+        cosxy = cosx * cosy + sqrt(1.0 - cosx2) * sqrt(1.0 - cosy2);
+        // Rescale from [+1.0, -1.0] to [0.0, 1.0].
+        cosxy = (cosxy - 1.0) / (-2.0);
+        // Update sum.
+        ang[i]    = (real)cosxy;
         sumcosxy += cosxy;
     }
     
-    // Normalize for number of angles summed.
-    sumcosxy /= (iatoms-2);
-    // Boundary check.
-    if (sumcosxy > 1.0)
-    {
-        return 1.0;
-    }
-    if (sumcosxy < 0.0)
-    {
-        return 0.0;
-    }
+    // Divide by n - 2.
+    sumcosxy /= (iatoms - 2);
     // Finished.
-    return sumcosxy;
+    return (real)sumcosxy;
 }
 
 
@@ -457,15 +446,57 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
     sum_angs  = sqrt(sum_angs / (iatoms - 2));
     // Rescale from [0, pi] to [0, 1].
     sum_angs /= 3.14159265359;
-    // Boundary check.
-    if (sum_angs > 1.0)
+    // Finished.
+    return (real)sum_angs;
+}
+
+
+
+real calc_ang2_n(int iatoms, rvec frame[], rvec rframe[], real ang[])
+{
+    // Error checking.
+    if (iatoms < 4)
     {
-        return 1.0;
+        gmx_fatal(FARGS, "Need at least 4 atoms in index group to use calc_ang.");
     }
-    if (sum_angs < 0.0)
+    
+    // Initializing variables.
+    int i;
+    rvec vec1, vec2;
+    double irang, irang2, sum_angs, pi12 = 3.14159265359;
+    real iang, rang;
+    
+    sum_angs        = 0.0;
+    ang[0]          = 0.0;
+    ang[iatoms - 1] = 0.0;
+    // There are n - 2 backbone angles.
+    for (i = 1; i < (iatoms - 1); i++)
     {
-        return 0.0;
+        /* Find the value of cosx and cosy.
+         * 
+         * x is the angle of two vectors made by three atom coords
+         * in frame. y is the same for rframe.
+         */
+        rvec_sub(frame[i - 1],  frame[i], vec1);
+        rvec_sub(frame[i + 1],  frame[i], vec2);
+        iang   = gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 1], rframe[i], vec1);
+        rvec_sub(rframe[i + 1], rframe[i], vec2);
+        rang   = gmx_angle(vec1, vec2);
+        
+        // Absolute value of the difference in angles.
+        irang  = (double)(iang - rang);
+        irang2 = irang * irang;
+        // Square root and rescale. Reusing variable irang.
+        irang     = sqrt(irang2) / pi12;
+        ang[i]    = (real)irang;
+        // Update sum.
+        sum_angs += irang;
     }
+    
+    // Divide by n - 2 angles and take the root.
+    sum_angs /= iatoms - 2;
     // Finished.
     return (real)sum_angs;
 }
@@ -487,7 +518,6 @@ real calc_dih(int iatoms, rvec frame[], rvec rframe[])
     real iang, rang;
     
     sumcosxy = 0.0;
-    
     // There are n - 3 dihedral angles.
     for (i = 3; i < iatoms; i++)
     {
@@ -540,26 +570,17 @@ real calc_dih(int iatoms, rvec frame[], rvec rframe[])
             rang *= -1.0;
         }
         // Solve for cos(x - y).
-        cosxy = cos((double)(iang - rang));
+        cosxy     = cos((double)(iang - rang));
         // Update sum.
         sumcosxy += cosxy;
     }
     
     // Normalize for number of angles summed.
     sumcosxy /= (iatoms - 3);
-    // Rescale from [-1, +1] to [0, 1].
+    // Rescale from [-1, +1] to [0, 1]
     sumcosxy  = (sumcosxy - 1.0) / (-2.0);
-    // Boundary check.
-    if (sumcosxy > 1)
-    {
-        return 1.0;
-    }
-    if (sumcosxy < 0)
-    {
-        return 0.0;
-    }
     // Finished.
-    return sumcosxy;
+    return (real)sumcosxy;
 }
 
 
@@ -574,23 +595,26 @@ real calc_dih_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
     
     // Initializing variables.
     int i;
-    real cosxy, sumcosxy;
+    double cosxy, sumcosxy;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
     sumcosxy = 0.0;
-    
-    // Loop from the third atom to the last atom. Forward direction.
+    for (i = 0; i < iatoms; i++)
+    {
+        dih[i] = 0.0;
+    }
+    // There are n - 3 dihedral angles.
     for (i = 3; i < iatoms; i++)
     {
         /* Use four atom coordinates to make two planes defined
-         * by three atom coordinates on those planes.
+         * by three atom coordinates on each plane.
          * 
-         * Find the angle between the two planes by finding two
-         * vectors normal to each plane. 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
          * 
-         * Most tricks only return an angle between 0 and
-         * pi rather than the full 2*pi possible range. The
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
          * method of using the sign of the inner product of
          * the vector normal to one plane with a vector on the
          * other plane comes from bondfree.c in the gromacs
@@ -626,31 +650,33 @@ real calc_dih_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
         cprod(vec2, vec3, pvec2);
         // Find the angle between plane vectors.
         rang = gmx_angle(pvec1, pvec2);
-        // Calculate and apply the sign.
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
         if (iprod(vec1, pvec2) < 0.0)
         {
             rang *= -1.0;
         }
-        // Solve for the dot product and normalize.
-        cosxy = (real)(cos(((double)rang) - ((double)iang)) - 1.0)/(-2.0);
-        // Overall summation.
-        sumcosxy += cosxy;
+        // Solve for cos(x - y).
+        cosxy       = cos((double)(iang - rang));
+        // Rescale from [-1, +1] to [0, 1].
+        cosxy      += (cosxy - 1.0) / (-2.0);
+        // Array dih stores the means of two dihedral angles.
+        dih[i - 2] += (real)cosxy;
+        dih[i - 1] += (real)cosxy;
+        // Update sum.
+        sumcosxy   += cosxy;
     }
     
-    // Normalize for number of angles summed.
+    // Divide by the number of angles summed.
     sumcosxy /= (iatoms - 3);
-    // Boundary check.
-    if (sumcosxy > 1)
+    // Array dih stores the means of two dihedral angles.
+    // *** First and last indeces = 0.0.
+    // *** Second and second last indeces only include one dihedral angle.
+    for (i = 2; i < (iatoms - 2); i++)
     {
-        return 1.0;
+        dih[i] /= 2.0;
     }
-    if (sumcosxy < 0)
-    {
-        return 0.0;
-    }
-    
     // Finished.
-    return sumcosxy;
+    return (real)sumcosxy;
 }
 
 
@@ -670,7 +696,6 @@ real calc_dih2(int iatoms, rvec frame[], rvec rframe[])
     real iang, rang;
     
     sum_dihs = 0.0;
-    
     // There are n - 3 dihedral angles.
     for (i = 3; i < iatoms; i++)
     {
@@ -742,17 +767,116 @@ real calc_dih2(int iatoms, rvec frame[], rvec rframe[])
     sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
     // Rescale from [0, pi] to [0, 1].
     sum_dihs /= pi12;
-    // Boundary check.
-    if (sum_dihs > 1)
+    // Finished.
+    return (real)sum_dihs;
+}
+
+
+
+real calc_dih2_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
+{
+    // Error checking.
+    if (iatoms < 6)
     {
-        return 1.0;
+        gmx_fatal(FARGS,"Need at least 6 atoms in index group to use calc_dih.");
     }
-    if (sum_dihs < 0)
+    
+    // Initializing variables.
+    int i;
+    double dihi, dihi2, sum_dihs, pi12 = 3.14159265359;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_dihs = 0.0;
+    for (i = 0; i < iatoms; i++)
     {
-        return 0.0;
+        dih[i] = 0.0;
+    }
+    // There are n - 3 dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Solve for (iang - rang) ^ 2.
+        dihi  = (double)(iang - rang);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dihi > pi12)
+        {
+            dihi -= 2 * pi12;
+        }
+        else if (dihi < -pi12)
+        {
+            dihi += 2 * pi12;
+        }
+        dihi2 = dihi * dihi;
+        // Take root, rescale, and update output. Reusing variable dihi.
+        dihi        = sqrt(dihi2) / pi12;
+        // Array dih stores the means of two dihedral angles.
+        dih[i - 1] += (real)dihi;
+        dih[i - 2] += (real)dihi;
+        // Update sum.
+        sum_dihs += dihi2;
+    }
+    
+    // Divide by n - 3 and take sqrt.
+    sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
+    // Rescale from [0, pi] to [0, 1].
+    sum_dihs /= pi12;
+    // Array dih stores the means of two dihedral angles.
+    // *** First and last indeces = 0.0.
+    // *** Second and second last indeces only include one dihedral angle.
+    for (i = 2; i < (iatoms - 2); i++)
+    {
+        dih[i] /= 2.0;
     }
     // Finished.
-    return sum_dihs;
+    return (real)sum_dihs;
 }
 
 
@@ -772,7 +896,6 @@ real calc_angdih(int iatoms, rvec frame[], rvec rframe[])
     real iang, rang;
     
     sum_angs = 0.0; sum_dihs = 0.0;
-    
     // There are n - 2 backbone angles.
     for (i = 1; i < (iatoms - 1); i++)
     {
@@ -802,6 +925,15 @@ real calc_angdih(int iatoms, rvec frame[], rvec rframe[])
          * cos(x) * cos(y) + sqrt(1 - (cos(x) ^ 2)) * sqrt(1 - (cos(y) ^ 2)) 
          */
         
+        // Need to check for numerical precision to avoid negative root.
+        if (cosx2 > 1.0)
+        {
+            cosx2 = 1.0;
+        }
+        if (cosy2 > 1.0)
+        {
+            cosy2 = 1.0;
+        }
         // This results in a number between -1.0 and +1.0.
         cosxy = cosx * cosy + sqrt(1.0 - cosx2) * sqrt(1.0 - cosy2);
         // Update sum.
@@ -871,23 +1003,6 @@ real calc_angdih(int iatoms, rvec frame[], rvec rframe[])
     // Rescale from [-1, +1] to [0, 1].
     sum_angs   = (sum_angs - 1.0) / (-2.0);
     sum_dihs   = (sum_dihs - 1.0) / (-2.0);
-    // Boundary check.
-    if (sum_angs > 1.0)
-    {
-        sum_angs = 1.0;
-    }
-    else if (sum_angs < 0.0)
-    {
-        sum_angs = 0.0;
-    }
-    if (sum_dihs > 1.0)
-    {
-        sum_dihs = 1.0;
-    }
-    else if (sum_dihs < 0.0)
-    {
-        sum_dihs = 1.0;
-    }
     // Return geometric mean.
     return (real)sqrt(sum_angs * sum_dihs);
 }
@@ -899,165 +1014,20 @@ real calc_angdih_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
     // Error checking.
     if (iatoms < 6)
     {
-        // Not sure if this works. Depends on how FARGS works.
-        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_angdih.");
-    }
-    // Initializing variables.
-    int i;
-    double angs, dihs, cosxy;
-    rvec vec1, vec2, vec3, pvec1, pvec2;
-    double cosx, cosx2, cosy, cosy2, iang, rang;
-    
-    angs = 0.0; dihs = 0.0;
-    
-    // There are n - 2 backbone angles.
-    for (i = 1; i < (iatoms - 1); i++)
-    {
-        /* Find the value of cosx and cosy.
-         * 
-         * x is the angle of two vectors made by three atom coords
-         * in frame[]. y is the same for rframe[].
-         */
-        rvec_sub(frame[i - 1],  frame[i], vec1);
-        rvec_sub(frame[i + 1],  frame[i], vec2);
-        cosx = iprod(vec1, vec2) / (norm(vec1) * norm(vec2));
-        
-        rvec_sub(rframe[i - 1], rframe[i], vec1);
-        rvec_sub(rframe[i + 1], rframe[i], vec2);
-        cosy = iprod(vec1, vec2) / (norm(vec1) * norm(vec2));
-        
-        /* Find the value of cos(x-y) using trig identities.
-         * 
-         * cos(x-y) = cos(x)*cos(y) + sin(x)*sin(y)
-         * sin(x) = sin(acos(cos(x)))
-         * sin(acos(z)) = sqrt(1 - z^2)
-         *
-         * Therefore:
-         * cos(x-y) = 
-         * cos(x)*cos(y) + sqrt(1-(cos(x))^2)*sqrt(1-(cos(y))^2) 
-         */
-        // First check for boundary conditions.
-        cosx2 = cosx * cosx;
-        if (cosx2 >  1)
-        {
-            cosx2 =  1.0;
-        }
-        
-        cosy2 = cosy * cosy;
-        if (cosy2 >  1)
-        {
-            cosy2 =  1.0;
-        }
-        
-        // This results in a number between -1 and +1.
-        cosxy = cosx * cosy + sqrt(1.0 - cosx2) * sqrt(1.0 - cosy2);
-        // Normalize to between 0 and 1.
-        cosxy = (cosxy - 1.0) / (-2.0);
-        // For average sum.
-        angs += cosxy;
-    }
-    
-    // Loop from the third atom to the last atom. Calculate backbone dihedrals.
-    for (i = 3; i < iatoms; i++)
-    {
-        /* Use four atom coordinates to make two planes defined
-         * by three atom coordinates on those planes.
-         * 
-         * Find the angle between the two planes by finding two
-         * vectors normal to each plane. 
-         * 
-         * Most tricks only return an angle between 0 and
-         * pi rather than the full 2*pi possible range. The
-         * method of using the sign of the inner product of
-         * the vector normal to one plane with a vector on the
-         * other plane comes from bondfree.c in the gromacs
-         * source.
-         * 
-         * Note that since the result is the difference of two
-         * angles, the directionality of the sign is unimportant
-         * as long as it is consistent.
-         */
-        // Convert four atom coordinates into three vectors.
-        rvec_sub(frame[i - 3], frame[i - 2], vec1);
-        rvec_sub(frame[i - 1], frame[i - 2], vec2);
-        rvec_sub(frame[i - 1], frame[i],     vec3);
-        // Convert three vectors into two normal to each plane.
-        cprod(vec1, vec2, pvec1);
-        cprod(vec2, vec3, pvec2);
-        // Find the angle between plane vectors.
-        iang = gmx_angle(pvec1, pvec2);
-        // Calculate and apply the sign.
-        if (iprod(vec1, pvec2) < 0.0)
-        {
-            iang *= -1.0;
-        }
-        
-        /* Repeat for the reference frame.
-         */
-        // Make three vectors.
-        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
-        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
-        rvec_sub(rframe[i - 1], rframe[i],     vec3);
-        // Convert three vectors into two normal to each plane.
-        cprod(vec1, vec2, pvec1);
-        cprod(vec2, vec3, pvec2);
-        // Find the angle between plane vectors.
-        rang = gmx_angle(pvec1, pvec2);
-        // Calculate and apply the sign.
-        if (iprod(vec1, pvec2) < 0.0)
-        {
-            rang *= -1.0;
-        }
-        // Solve for the dot product and normalize.
-        cosxy = (real)(cos(((double)rang) - ((double)iang)) - 1.0) / (-2.0);
-        // Overall summation.
-        dihs += cosxy;
-    }
-    
-    // Divide by number of angles summed.
-    angs /= (iatoms - 2);
-    dihs /= (iatoms - 3);
-    
-    // Boundary check.
-    if (angs > 1)
-    {
-        angs = 1.0;
-    }
-    if (angs < 0)
-    {
-        angs = 0.0;
-    }
-    if (dihs > 1)
-    {
-        dihs = 1.0;
-    }
-    if (dihs < 0)
-    {
-        dihs = 0.0;
-    }
-    
-    // Finished. Return geometric mean of the two.
-    return sqrt(angs * dihs);
-}
-
-
-
-real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
-{
-    // Error checking.
-    if (iatoms < 6)
-    {
         gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_angdih.");
     }
     // Initializing variables.
     int i;
     double pi12 = 3.14159265359;
-    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
+    double cosx, cosx2, cosy, cosy2, cosxy, sum_angs, sum_dihs;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
     sum_angs = 0.0; sum_dihs = 0.0;
-    
+    for (i = 0; i < iatoms; i++)
+    {
+        angdih[i] = 0.0;
+    }
     // There are n - 2 backbone angles.
     for (i = 1; i < (iatoms - 1); i++)
     {
@@ -1068,18 +1038,38 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
          */
         rvec_sub(frame[i - 1],  frame[i], vec1);
         rvec_sub(frame[i + 1],  frame[i], vec2);
-        iang   = gmx_angle(vec1, vec2);
+        cosx  = cos_angle(vec1, vec2);
+        cosx2 = cosx * cosx;
         
         rvec_sub(rframe[i - 1], rframe[i], vec1);
         rvec_sub(rframe[i + 1], rframe[i], vec2);
-        rang   = gmx_angle(vec1, vec2);
+        cosy  = cos_angle(vec1, vec2);
+        cosy2 = cosy * cosy;
         
-        // Absolute value of the difference in angles.
-        irang  = iang - rang;
-        irang2 = irang * irang;
+        /* Find the value of cos(x - y) using trig identities.
+         * 
+         * cos(x - y) = cos(x) * cos(y) + sin(x) * sin(y)
+         * sin(x) = sin(acos(cos(x)))
+         * sin(acos(z)) = sqrt(1 - (z ^ 2))
+         *
+         * Therefore:
+         * cos(x - y) = 
+         * cos(x) * cos(y) + sqrt(1 - (cos(x) ^ 2)) * sqrt(1 - (cos(y) ^ 2)) 
+         */
         
+        // Need to check for numerical precision to avoid negative root.
+        if (cosx2 > 1.0)
+        {
+            cosx2 = 1.0;
+        }
+        if (cosy2 > 1.0)
+        {
+            cosy2 = 1.0;
+        }
+        // This results in a number between -1.0 and +1.0.
+        cosxy = cosx * cosy + sqrt(1.0 - cosx2) * sqrt(1.0 - cosy2);
         // Update sum.
-        sum_angs += irang2;
+        sum_angs += cosxy;
     }
     
     // There are n - 3 dihedral angles.
@@ -1133,7 +1123,117 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
         {
             rang *= -1.0;
         }
-        // Solve for (iang - rang) ^ 2.
+        // Solve for cos(x - y).
+        cosxy = cos((double)(iang - rang));
+        // Update sum.
+        sum_dihs += cosxy;
+    }
+    
+    // Divide by number of angles summed.
+    sum_angs  /= (iatoms - 2);
+    sum_dihs  /= (iatoms - 3);
+    // Rescale from [-1, +1] to [0, 1].
+    sum_angs   = (sum_angs - 1.0) / (-2.0);
+    sum_dihs   = (sum_dihs - 1.0) / (-2.0);
+    // Return geometric mean.
+    return (real)sqrt(sum_angs * sum_dihs);
+}
+
+
+
+real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_multi)
+{
+    // Error checking.
+    if (iatoms < 6)
+    {
+        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_angdih.");
+    }
+    // Initializing variables.
+    int i;
+    double pi12   = 3.14159265359;
+    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
+    double sum_denom;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_angs = 0.0; sum_dihs = 0.0;
+    // There are n - 2 backbone angles.
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        /* Find the value of cosx and cosy.
+         * 
+         * x is the angle of two vectors made by three atom coords
+         * in frame. y is the same for rframe.
+         */
+        rvec_sub(frame[i - 1],  frame[i], vec1);
+        rvec_sub(frame[i + 1],  frame[i], vec2);
+        iang   = gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 1], rframe[i], vec1);
+        rvec_sub(rframe[i + 1], rframe[i], vec2);
+        rang   = gmx_angle(vec1, vec2);
+        
+        // Squared difference of angles.
+        irang  = iang - rang;
+        irang2 = irang * irang;
+        
+        // Update sum.
+        sum_angs += irang2;
+        sum_angs *= ang_multi;
+    }
+    
+    // There are n - 3 dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Solve for the difference between the two angles.
         dihi  = (double)(iang - rang);
         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
         if (dihi > pi12)
@@ -1149,20 +1249,158 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[])
         sum_dihs += dihi2;
     }
     
-    // Divide by number of angles summed and take sqrt.
-    sum_angdih  = sqrt((sum_angs + sum_dihs) / (2 * iatoms - 5));
+    // Calculate denominator based on the number of angles summed.
+    sum_denom   = (ang_multi + 1.0) * iatoms - (2.0 * ang_multi - 3.0); 
+    // Divide by angles summed and take sqrt.
+    sum_angdih  = sqrt((sum_angs + sum_dihs) / sum_denom);
     // Rescale from [0, pi] to [0, 1].
     sum_angdih /= pi12;
-    // Boundary check.
-    if (sum_angdih > 1.0)
+    // Output.
+    return (real)sum_angdih;
+}
+
+
+
+real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], double ang_multi)
+{
+    // Error checking.
+    if (iatoms < 6)
     {
-        return 1.0;
+        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_angdih.");
     }
-    if (sum_angdih < 0.0)
+    // Initializing variables.
+    int i;
+    double pi12   = 3.14159265359;
+    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
+    double sum_denom;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_angs = 0.0; sum_dihs = 0.0;
+    for (i = 0; i < iatoms; i++)
     {
-        return 0.0;
+        angdih[i] = 0.0;
+    }
+    // There are n - 3 dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Solve for the difference between the two angles.
+        dihi  = (double)(iang - rang);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dihi > pi12)
+        {
+            dihi -= 2 * pi12;
+        }
+        else if (dihi < -pi12)
+        {
+            dihi += 2 * pi12;
+        }
+        dihi2 = dihi * dihi;
+        // Update output array.
+        angdih[i - 2] += (real)dihi2;
+        angdih[i - 1] += (real)dihi2;
+        // Update sum.
+        sum_dihs += dihi2;
     }
     
+    // The dih portion of angdih stores the means of two dihedral angles.
+    // *** First and last indeces = 0.0.
+    // *** Second and second last indeces only include one dihedral angle.
+    for (i = 2; i < (iatoms - 2); i++)
+    {
+        angdih[i] /= 2.0;
+    }
+    
+    // There are n - 2 backbone angles.
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        /* Find the value of cosx and cosy.
+         * 
+         * x is the angle of two vectors made by three atom coords
+         * in frame. y is the same for rframe.
+         */
+        rvec_sub(frame[i - 1],  frame[i], vec1);
+        rvec_sub(frame[i + 1],  frame[i], vec2);
+        iang   = gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 1], rframe[i], vec1);
+        rvec_sub(rframe[i + 1], rframe[i], vec2);
+        rang   = gmx_angle(vec1, vec2);
+        
+        // Squared difference of angles.
+        irang      = iang - rang;
+        irang2     = irang * irang;
+        // Apply multiplier. Update output array.
+        irang2    *= ang_multi;
+        angdih[i] += (real)irang2;
+        // Update sum.
+        sum_angs  += irang2;
+    }
+    
+    // Finalize output array.
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        // Take the mean of ang and dih. Adjust for ang_multi.
+        angdih[i] /= ang_multi + 1.0;
+        // Take sqrt.
+        angdih[i]  = sqrt(angdih[i]);
+        // Rescale from [0, pi] to [0, 1].
+        angdih[i] /= pi12;
+    }
+    // Calculate denominator based on the number of angles summed.
+    sum_denom   = (ang_multi + 1.0) * iatoms - (2.0 * ang_multi - 3.0); 
+    // Divide by angles summed and take sqrt.
+    sum_angdih  = sqrt((sum_angs + sum_dihs) / sum_denom);
+    // Rescale from [0, pi] to [0, 1].
+    sum_angdih /= pi12;
     // Output.
     return (real)sum_angdih;
 }
@@ -2099,7 +2337,14 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
     if (strcmp(ISDM, "ANGDIH2") == 0)
     {
         // Combination of ang and dih.
-        return calc_angdih2(iatoms, cframe, rframe);
+        return calc_angdih2(iatoms, cframe, rframe, 1.0);
+    }
+    
+    // Combination of ang and dih. User gives -angdih2m option.
+    if (strcmp(ISDM, "ANGDIH2M") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_angdih2(iatoms, cframe, rframe, 10.0);
     }
     
     // Phi psi angles. User gives -phipsi option.

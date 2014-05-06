@@ -53,7 +53,7 @@ extern real calc_ang2(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_dih2(int iatoms, rvec frame[], rvec rframe[]);
 
-extern real calc_angdih2(int iatoms, rvec frame[], rvec rframe[]);
+extern real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_multi);
 
 extern real calc_phipsi(int iatoms, rvec frame[], rvec rframe[]);
 
