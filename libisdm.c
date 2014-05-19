@@ -44,10 +44,158 @@ double esa_analysis(int iatoms, rvec frame[], rvec rframe[], int sample);
 
 
 
+real calc_rmsd(int iatoms, rvec frame[], rvec rframe[])
+{
+    /* This is a simplified version of something in the gromacs lib.
+     * The accuracy is slightly improved by using doubles instead of reals.
+     */
+    int i, d;
+    double xd, msdt;
+    
+    msdt = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find msd.
+        for(d = 0; d < 3; d++)
+        {
+            xd = (double)(frame[i][d] - rframe[i][d]);
+            msdt += xd * xd;
+        }
+    }
+    // Normalize for number of atoms.
+    return (real)sqrt(msdt / iatoms);
+}
+
+
+
+real calc_rmsd_n(int iatoms, rvec frame[], rvec rframe[], real rmsd[])
+{
+    /* This is a simplified version of something in the gromacs lib.
+     * The accuracy is slightly improved by using doubles instead of reals.
+     */
+    int i, d;
+    double xd, msdi, msdt;
+    
+    msdt = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find msd.
+        msdi = 0.0;
+        for(d = 0; d < 3; d++)
+        {
+            xd = (double)(frame[i][d] - rframe[i][d]);
+            msdi += xd * xd;
+        }
+        rmsd[i] = (real)msdi;
+        msdt  += msdi;
+    }
+    // Normalize for number of atoms.
+    return (real)(msdt / iatoms);
+}
+
+
+
+real calc_srms(int iatoms, rvec frame[], rvec rframe[])
+{
+    /*
+     * The mmsdt is the average msd between the reference and its
+     * mirrored structures mirrored around 3 planes. Used to normalize
+     * the rmsd value.
+     */
+    int i, j, d;
+    double xd, xdm, msdt, mmsdt;
+    
+    // Initialize to zero.
+    msdt  = 0.0;
+    mmsdt = 0.0;
+    // Main loop.
+    for(i = 0; i < iatoms; i++)
+    {
+        // Copy over coordinates from xref and rotate them.
+        for(d = 0; d < 3; d++)
+        {
+            // This is the same as multiplying the reference structure by the 
+            // negative identity matrix.
+            
+            // Distance to mirrored structure.
+            xdm    = (double)(frame[i][d] + rframe[i][d]);
+            mmsdt += xdm * xdm;
+            
+            // Calculate ith msd.
+            xd     = (double)(frame[i][d] - rframe[i][d]);
+            msdt  += xd  * xd;
+        }
+    }
+    
+    // Normalize for number of atoms.
+    msdt  /= iatoms;
+    mmsdt /= iatoms;
+    // Scale by the mirrored reference msd and take the root.
+    return (real)sqrt(msdt / mmsdt);
+}
+
+
+
+real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
+{
+    /*
+     * The mmsdt is the average msd between the reference and its
+     * mirrored structures mirrored around 3 planes. Used to normalize
+     * the rmsd value.
+     */
+    int i, j, d;
+    double xd, xdm, msdi, msdt, mmsdt;
+    
+    // Initialize to zero.
+    msdt  = 0;
+    mmsdt = 0;
+    
+    // Main loop.
+    for(i = 0; i < iatoms; i++)
+    {
+        // Copy over coordinates from xref and rotate them.
+        msdi = 0.0;
+        for(d = 0; d < 3; d++)
+        {
+            // This is the same as multiplying the reference structure by the 
+            // negative identity matrix.
+            
+            // Distance to mirrored structure.
+            xdm    = (double)(frame[i][d] + rframe[i][d]);
+            mmsdt += xdm * xdm;
+            
+            // Calculate ith msd.
+            xd     = (double)(frame[i][d] - rframe[i][d]);
+            msdi  += xd  * xd;
+        }
+        srms[i] = (real)msdi;
+        msdt   += msdi;
+    }
+    
+    // Normalize for number of atoms.
+    msdt  /= iatoms;
+    mmsdt /= iatoms;
+    // Scale by the mirrored reference msd and take the root.
+    for (i = 0; i < iatoms; i++)
+    {
+        srms[i] = (real)sqrt(((double)srms[i]) / mmsdt);
+        // The total msd is always less than mmsd, but individual atoms may 
+        // be greater.
+        if (srms[i] > 1.0)
+        {
+            srms[i] = 1.0;
+        }
+    }
+    return (real)sqrt(msdt / mmsdt);
+}
+
+
+
 real calc_drms(int iatoms, rvec frame[], rvec rframe[])
 {
     int i, j;
-    real ileg, rleg, diff_leg, sum_dist, drmsi;
+    double sum_dist, drmsi, diff_leg;
+    real ileg, rleg;
     
     // Final sum.
     sum_dist = 0.0;
@@ -65,7 +213,7 @@ real calc_drms(int iatoms, rvec frame[], rvec rframe[])
             ileg = distance2(frame[i], frame[j]);
             rleg = distance2(rframe[i], rframe[j]);
             // Find difference in the distances between the pair of atoms.
-            diff_leg = sqrt(ileg) - sqrt(rleg);
+            diff_leg = sqrt((double)ileg) - sqrt((double)rleg);
             // Update the sum by squaring the difference.
             drmsi += diff_leg * diff_leg;
         }
@@ -73,10 +221,8 @@ real calc_drms(int iatoms, rvec frame[], rvec rframe[])
         sum_dist += drmsi / (iatoms - 1);
     }
     
-    // Normalize by the number of summed differences.
-    sum_dist /= iatoms;
-    // Output.
-    return sqrt(sum_dist);
+    // Normalize by the number of summed differences and take the root.
+    return (real)sqrt(sum_dist / iatoms);
 }
 
 
@@ -84,7 +230,8 @@ real calc_drms(int iatoms, rvec frame[], rvec rframe[])
 real calc_drms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
 {
     int i, j;
-    real ileg, rleg, diff_leg, sum_dist, Rgi, Rgr, Rg2;
+    double sum_dist, drmsi, diff_leg;
+    real ileg, rleg;
     
     // Don't assume that drms is zeros already.
     for (i = 0; i < iatoms; i++)
@@ -92,9 +239,6 @@ real calc_drms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
         drms[i] = 0.0;
     }
     
-    //Normalization
-    Rgi = 0.0;
-    Rgr = 0.0;
     // Final sum.
     sum_dist = 0.0;
     // Loop through each atom.
@@ -110,25 +254,19 @@ real calc_drms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
             ileg = distance2(frame[i], frame[j]);
             rleg = distance2(rframe[i], rframe[j]);
             // Find difference in the distances between the pair of atoms.
-            diff_leg = sqrt(ileg) - sqrt(rleg);
+            diff_leg = sqrt((double)ileg) - sqrt((double)rleg);
             // Update the sum by squaring the difference.
-            drms[i] += diff_leg * diff_leg;
+            drmsi   += diff_leg * diff_leg;
         }
         // Normalize the sum by the number of differences.
-        drms[i] /= (iatoms-1);
+        drmsi    /= iatoms - 1;
         // Update the main sum.
-        sum_dist += drms[i];
+        drms[i]   = (real)sqrt(drmsi);
+        sum_dist += drmsi;
     }
     
-    // Normalize by the number of summed differences.
-    sum_dist /= iatoms;
-    // Take the root for each atom.
-    for (i = 0; i < iatoms; i++)
-    {
-        drms[i] = sqrt(drms[i]);
-    }
-    // Output.
-    return sqrt(sum_dist);
+    // Normalize by the number of summed differences and take the root.
+    return (real)sqrt(sum_dist / iatoms);
 }
 
 
@@ -136,7 +274,8 @@ real calc_drms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
 real calc_sdrms(int iatoms, rvec frame[], rvec rframe[])
 {
     int i, j;
-    real ileg, rleg, diff_leg, sum_dist, drmsi, Rgi, Rgr, Rg2;
+    double sum_dist, drmsi, diff_leg, Rgi, Rgr, Rg2;
+    real ileg, rleg;
     
     //Normalization
     Rgi = 0.0;
@@ -157,10 +296,10 @@ real calc_sdrms(int iatoms, rvec frame[], rvec rframe[])
             ileg = distance2(frame[i], frame[j]);
             rleg = distance2(rframe[i], rframe[j]);
             // Normalization
-            Rgi += ileg;
-            Rgr += rleg;
+            Rgi += (double)ileg;
+            Rgr += (double)rleg;
             // Find difference in the distances between the pair of atoms.
-            diff_leg = sqrt(ileg) - sqrt(rleg);
+            diff_leg = sqrt((double)ileg) - sqrt((double)rleg);
             // Update the sum by squaring the difference.
             drmsi += diff_leg * diff_leg;
         }
@@ -171,7 +310,7 @@ real calc_sdrms(int iatoms, rvec frame[], rvec rframe[])
     // Solves for Rg which is used to scale for molecule size.
     Rgi = sqrt(Rgi / (2 * iatoms * iatoms));
     Rgr = sqrt(Rgr / (2 * iatoms * iatoms));
-    Rg2  = Rgi + Rgr;
+    Rg2  = Rgi + Rgr; // Equal to twice the mean Rg.
     // First, normalize by the number of summed differences.
     sum_dist /= iatoms;
     // Take the root and scale by the molecule size (twice the mean Rg).
@@ -190,16 +329,11 @@ real calc_sdrms(int iatoms, rvec frame[], rvec rframe[])
 
 
 
-real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
+real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real sdrms[])
 {
     int i, j;
-    real ileg, rleg, diff_leg, sum_dist, Rgi, Rgr, Rg2;
-    
-    // Don't assume that drms is zeros already.
-    for (i = 0; i < iatoms; i++)
-    {
-        drms[i] = 0.0;
-    }
+    real ileg, rleg;
+    double diff_leg, drmsi, sum_dist, Rgi, Rgr, Rg2;
     
     //Normalization
     Rgi = 0.0;
@@ -219,47 +353,50 @@ real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
             ileg = distance2(frame[i], frame[j]);
             rleg = distance2(rframe[i], rframe[j]);
             // Normalization
-            Rgi += ileg;
-            Rgr += rleg;
+            Rgi += (double)ileg;
+            Rgr += (double)rleg;
             // Find difference in the distances between the pair of atoms.
-            diff_leg = sqrt(ileg) - sqrt(rleg);
+            diff_leg = sqrt((double)ileg) - sqrt((double)rleg);
             // Update the sum by squaring the difference.
-            drms[i] += diff_leg * diff_leg;
+            drmsi += diff_leg * diff_leg;
         }
         // Normalize the sum by the number of differences.
-        drms[i] /= (iatoms-1);
+        drmsi    /= (iatoms-1);
+        sdrms[i]   = (real)sqrt(drmsi);
         // Update the main sum.
-        sum_dist += drms[i];
+        sum_dist += drmsi;
     }
     
     // Solves for Rg which is used for normalization.
     Rgi = sqrt(Rgi / (2 * iatoms * iatoms));
     Rgr = sqrt(Rgr / (2 * iatoms * iatoms));
-    Rg2 = 2 * sqrt(Rgi*Rgr);
+    Rg2 = Rgi + Rgr; // Twice the mean Rg.
     // First, normalize by the number of summed differences.
     sum_dist /= iatoms;
     // Second, take the root.
-    sum_dist = sqrt(sum_dist);
+    sum_dist  = sqrt(sum_dist);
     // Third, sqrt and scale by the molecule size. Twice the geometric mean Rg.
     sum_dist /= Rg2;
+    // Repeat per atom.
+    for (i = 0; i < iatoms; i++)
+    {
+        sdrms[i] /= Rg2;
+        if (sdrms[i] > 1.0)
+        {
+            // After scaling there is a small chance of the result being > 1.
+            sdrms[i] = 1.0;
+        }
+    }
     // Expected output is between 0 and 1, but the scaling allows for a small
     // chance of an output being >1. This would be undesirable.
     if (sum_dist > 1.0)
     {
-        sum_dist = 1.0;
+        return 1.0;
     }
-    // Repeat per atom.
-    for (i = 0; i < iatoms; i++)
+    else
     {
-        drms[i] = sqrt(drms[i]);
-        drms[i] /= Rg2;
-        if (drms[i] > 1.0)
-        {
-            drms[i] = 1.0;
-        }
+        return sum_dist;
     }
-    // Output.
-    return sum_dist;
 }
 
 
@@ -1417,12 +1554,11 @@ real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
     
     // Initializing variables.
     int i, iC1 ,iC2, iN1, iN2, iCa;
-    double cosxy, phi, psi;
+    double cosxy, sum_phipsi;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
-    phi = 0.0; psi = 0.0;
-    
+    sum_phipsi = 0.0;
     // Phi angles.
     for (i = 1; i < (iatoms / 3); i++)
     {
@@ -1481,14 +1617,12 @@ real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
         }
         // Solve for cos(x - y).
         cosxy = cos((double)(iang - rang));
-        // Update phi sum.
-        phi += cosxy;
+        // Update phipsi sum.
+        sum_phipsi += cosxy;
     }
     
-    
-    
     // Psi angles.
-    for (i = 1; i < (iatoms / 3); i++)
+    for (i = 0; i < ((iatoms / 3) - 1); i++)
     {
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on those planes.
@@ -1508,10 +1642,10 @@ real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
          * as long as it is consistent.
          */
         // The atom indeces.
-        iN1 = 3 * i - 3;
-        iCa = 3 * i - 2;
-        iC1 = 3 * i - 1;
-        iN2 = 3 * i;
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC1 = 3 * i + 2;
+        iN2 = 3 * i + 3;
         // Convert four atom coordinates into three vectors.
         rvec_sub(frame[iN1], frame[iCa], vec1);
         rvec_sub(frame[iC1], frame[iCa], vec2);
@@ -1545,37 +1679,15 @@ real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
         }
         // Solve for cos(x - y).
         cosxy = cos((double)(iang - rang));
-        // Update psi sum.
-        psi += cosxy;
+        // Update phipsi sum.
+        sum_phipsi += cosxy;
     }
     
     // Divide by the number of angles summed.
-    phi /= (iatoms / 3) - 1;
-    psi /= (iatoms / 3) - 1;
-    // Rescale from [-1, +1] to [0, 1].
-    phi  = (phi - 1.0) / (-2.0);
-    psi  = (psi - 1.0) / (-2.0);
-    
-    // Boundary check.
-    if (phi > 1)
-    {
-        phi = 1.0;
-    }
-    else if (phi < 0)
-    {
-        phi = 0.0;
-    }
-    if (psi > 1)
-    {
-        psi = 1.0;
-    }
-    else if (psi < 0)
-    {
-        psi = 0.0;
-    }
-    
-    // Finished. Return geometric mean of phi and psi.
-    return (real)sqrt(phi * psi);
+    sum_phipsi /= 2 * ((iatoms / 3) - 1);
+    // Rescale from [+1, -1] to [0, 1].
+    sum_phipsi  = (sum_phipsi - 1.0) / (-2.0);
+    return (real)sum_phipsi;
 }
 
 
@@ -1590,14 +1702,17 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
     
     // Initializing variables.
     int i, iC1 ,iC2, iN1, iN2, iCa;
-    real cosxy, phi, psi;
+    double cosxy, sum_phipsi;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
-    phi = 0.0; psi = 0.0;
-    
+    sum_phipsi = 0.0;
+    for (i = 0; i < (iatoms / 3) - 1; i++)
+    {
+        phipsi[i] = 0.0;
+    }
     // Phi angles.
-    for (i=1; i < iatoms/3; i++)
+    for (i = 1; i < (iatoms / 3); i++)
     {
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on those planes.
@@ -1617,21 +1732,21 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
          * as long as it is consistent.
          */
         // The atom indeces.
-        iC1 = 3*i - 1;
-        iN1 = 3*i;
-        iCa = 3*i + 1;
-        iC2 = 3*i + 2;
+        iC1 = 3 * i - 1;
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC2 = 3 * i + 2;
         // Convert four atom coordinates into three vectors.
-        rvec_sub(frame[iC1],frame[iN1],vec1);
-        rvec_sub(frame[iCa],frame[iN1],vec2);
-        rvec_sub(frame[iCa],frame[iC2],vec3);
+        rvec_sub(frame[iC1], frame[iN1], vec1);
+        rvec_sub(frame[iCa], frame[iN1], vec2);
+        rvec_sub(frame[iCa], frame[iC2], vec3);
         // Convert three vectors into two normal to each plane.
-        cprod(vec1,vec2,pvec1);
-        cprod(vec2,vec3,pvec2);
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
         // Find the angle between plane vectors.
-        iang = gmx_angle(pvec1,pvec2);
+        iang = gmx_angle(pvec1, pvec2);
         // Calculate and apply the sign.
-        if (iprod(vec1,pvec2) < 0.0)
+        if (iprod(vec1, pvec2) < 0.0)
         {
             iang *= -1.0;
         }
@@ -1639,29 +1754,36 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         /* Repeat for the reference frame.
          */
         // Make three vectors.
-        rvec_sub(rframe[iC1],rframe[iN1],vec1);
-        rvec_sub(rframe[iCa],rframe[iN1],vec2);
-        rvec_sub(rframe[iCa],rframe[iC2],vec3);
+        rvec_sub(rframe[iC1], rframe[iN1], vec1);
+        rvec_sub(rframe[iCa], rframe[iN1], vec2);
+        rvec_sub(rframe[iCa], rframe[iC2], vec3);
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
         // Find the angle between plane vectors.
-        rang = gmx_angle(pvec1,pvec2);
+        rang = gmx_angle(pvec1, pvec2);
         // Calculate and apply the sign.
-        if (iprod(vec1,pvec2) < 0.0)
+        if (iprod(vec1, pvec2) < 0.0)
         {
             rang *= -1.0;
         }
         // Solve for the dot product and normalize.
         cosxy = (real)(cos(((double)iang) - ((double)rang)) - 1.0)/(-2.0);
-        // Final sum.
-        phi += cosxy;
+        // Update phipsi sum.
+        sum_phipsi += cosxy;
+        // Add sum to phipsi.
+        if (cosxy < 0.0)
+        {
+            phipsi[i] = 0.0;
+        }
+        else
+        {
+            phipsi[i] = cosxy;
+        }
     }
     
-    
-    
     // Psi angles.
-    for (i=1; i < iatoms/3; i++)
+    for (i = 0; i < ((iatoms / 3) - 1); i++)
     {
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on those planes.
@@ -1681,21 +1803,21 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
          * as long as it is consistent.
          */
         // The atom indeces.
-        iN1 = 3*i - 3;
-        iCa = 3*i - 2;
-        iC1 = 3*i - 1;
-        iN2 = 3*i;
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC1 = 3 * i + 2;
+        iN2 = 3 * i + 3;
         // Convert four atom coordinates into three vectors.
-        rvec_sub(frame[iN1],frame[iCa],vec1);
-        rvec_sub(frame[iC1],frame[iCa],vec2);
-        rvec_sub(frame[iC1],frame[iN2],vec3);
+        rvec_sub(frame[iN1], frame[iCa], vec1);
+        rvec_sub(frame[iC1], frame[iCa], vec2);
+        rvec_sub(frame[iC1], frame[iN2], vec3);
         // Convert three vectors into two normal to each plane.
-        cprod(vec1,vec2,pvec1);
-        cprod(vec2,vec3,pvec2);
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
         // Find the angle between plane vectors.
-        iang = gmx_angle(pvec1,pvec2);
+        iang = gmx_angle(pvec1, pvec2);
         // Calculate and apply the sign.
-        if (iprod(vec1,pvec2) < 0.0)
+        if (iprod(vec1, pvec2) < 0.0)
         {
             iang *= -1.0;
         }
@@ -1703,49 +1825,397 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         /* Repeat for the reference frame.
          */
         // Make three vectors.
-        rvec_sub(rframe[iN1],rframe[iCa],vec1);
-        rvec_sub(rframe[iC1],rframe[iCa],vec2);
-        rvec_sub(rframe[iC1],rframe[iN2],vec3);
+        rvec_sub(rframe[iN1], rframe[iCa], vec1);
+        rvec_sub(rframe[iC1], rframe[iCa], vec2);
+        rvec_sub(rframe[iC1], rframe[iN2], vec3);
         // Convert three vectors into two normal to each plane.
-        cprod(vec1,vec2,pvec1);
-        cprod(vec2,vec3,pvec2);
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
         // Find the angle between plane vectors.
-        rang = gmx_angle(pvec1,pvec2);
+        rang = gmx_angle(pvec1, pvec2);
         // Calculate and apply the sign.
-        if (iprod(vec1,pvec2) < 0.0)
+        if (iprod(vec1, pvec2) < 0.0)
         {
             rang *= -1.0;
         }
         // Solve for the dot product and normalize range: 0 to 1.
         cosxy = (real)(cos(((double)iang) - ((double)rang)) - 1.0)/(-2.0);
         // Final sum.
-        psi += cosxy;
+        sum_phipsi += cosxy;
+        // Update phipsi.
+        if (i == 0) // First residue has no phi angle.
+        {
+            if (cosxy < 0.0)
+            {
+                phipsi[0] = 0.0;
+            }
+            else
+            {
+                phipsi[0] = cosxy;
+            }
+        }
+        else
+        {
+            if (cosxy < 0.0)
+            {
+                phipsi[i] = phipsi[i] / 2.0;
+            }
+            else
+            {
+                phipsi[i] = (phipsi[i] + ((real)cosxy)) / 2.0;
+            }
+        }
     }
     
     // Divide by the number of angles summed.
-    phi /= (iatoms / 3) - 1;
-    psi /= (iatoms / 3) - 1;
-    
-    // Boundary check.
-    if (phi > 1)
+    sum_phipsi /= 2 * ((iatoms / 3) - 1);
+    return (real)sum_phipsi;
+}
+
+
+
+real calc_phipsi2(int iatoms, rvec frame[], rvec rframe[])
+{
+    // Error checking.
+    if (iatoms < 6)
     {
-        phi = 1.0;
-    }
-    if (phi < 0)
-    {
-        phi = 0.0;
-    }
-    if (psi > 1)
-    {
-        psi = 1.0;
-    }
-    if (psi < 0)
-    {
-        psi = 0.0;
+        gmx_fatal(FARGS,"Need at least 6 atoms in index group to use calc_phipsi.");
     }
     
-    // Finished. Return geometric mean of phi and psi.
-    return sqrt(phi * psi);
+    // Initializing variables.
+    int i, iC1 ,iC2, iN1, iN2, iCa;
+    double irang, irang2, sum_phipsi, pi12 = 3.14159265359;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_phipsi = 0.0;
+    // Phi angles.
+    for (i = 1; i < (iatoms / 3); i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on those planes.
+         * 
+         * Find the angle between the two planes by finding two
+         * vectors normal to each plane. 
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // The atom indeces.
+        iC1 = 3 * i - 1;
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC2 = 3 * i + 2;
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[iC1], frame[iN1], vec1);
+        rvec_sub(frame[iCa], frame[iN1], vec2);
+        rvec_sub(frame[iCa], frame[iC2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[iC1], rframe[iN1], vec1);
+        rvec_sub(rframe[iCa], rframe[iN1], vec2);
+        rvec_sub(rframe[iCa], rframe[iC2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Square the difference.
+        irang  = (double)(iang - rang);
+        if (irang >  pi12)
+        {
+            irang -= 2 * pi12;
+        }
+        if (irang < -pi12)
+        {
+            irang += 2 * pi12;
+        }
+        irang2 = irang * irang;
+        // Update phipsi sum.
+        sum_phipsi += irang2;
+    }
+    
+    // Psi angles.
+    for (i = 0; i < ((iatoms / 3) - 1); i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on those planes.
+         * 
+         * Find the angle between the two planes by finding two
+         * vectors normal to each plane. 
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // The atom indeces.
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC1 = 3 * i + 2;
+        iN2 = 3 * i + 3;
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[iN1], frame[iCa], vec1);
+        rvec_sub(frame[iC1], frame[iCa], vec2);
+        rvec_sub(frame[iC1], frame[iN2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[iN1], rframe[iCa], vec1);
+        rvec_sub(rframe[iC1], rframe[iCa], vec2);
+        rvec_sub(rframe[iC1], rframe[iN2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Square of difference of angles limited to range [-pi, +pi].
+        irang  = (double)(iang - rang);
+        if (irang >  pi12)
+        {
+            irang -= 2 * pi12;
+        }
+        if (irang < -pi12)
+        {
+            irang += 2 * pi12;
+        }
+        irang2 = irang * irang;
+        // Update phipsi sum.
+        sum_phipsi += irang2;
+    }
+    
+    // Divide by the number of angles summed and sqrt.
+    sum_phipsi  = sqrt(sum_phipsi / (2 * ((iatoms / 3) - 1)));
+    // Rescale from [0, pi] to [0, 1].
+    sum_phipsi /= pi12;
+    return (real)sum_phipsi;
+}
+
+
+
+real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
+{
+    // Error checking.
+    if (iatoms < 6)
+    {
+        gmx_fatal(FARGS,"Need at least 6 atoms in index group to use calc_phipsi.");
+    }
+    
+    // Initializing variables.
+    int i, iC1 ,iC2, iN1, iN2, iCa;
+    double irang, irang2, sum_phipsi, pi12 = 3.14159265359;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_phipsi = 0.0;
+    for (i = 0; i < (iatoms / 3); i++)
+    {
+        phipsi[i] = 0.0;
+    }
+    // Phi angles.
+    for (i = 1; i < (iatoms / 3); i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on those planes.
+         * 
+         * Find the angle between the two planes by finding two
+         * vectors normal to each plane. 
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // The atom indeces.
+        iC1 = 3 * i - 1;
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC2 = 3 * i + 2;
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[iC1], frame[iN1], vec1);
+        rvec_sub(frame[iCa], frame[iN1], vec2);
+        rvec_sub(frame[iCa], frame[iC2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[iC1], rframe[iN1], vec1);
+        rvec_sub(rframe[iCa], rframe[iN1], vec2);
+        rvec_sub(rframe[iCa], rframe[iC2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Square the difference.
+        irang  = (double)(iang - rang);
+        if (irang >  pi12)
+        {
+            irang -= 2 * pi12;
+        }
+        if (irang < -pi12)
+        {
+            irang += 2 * pi12;
+        }
+        irang2 = irang * irang;
+        // Update phipsi sum.
+        sum_phipsi += irang2;
+        phipsi[i]   = irang2;
+    }
+    
+    // Psi angles.
+    for (i = 0; i < ((iatoms / 3) - 1); i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on those planes.
+         * 
+         * Find the angle between the two planes by finding two
+         * vectors normal to each plane. 
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // The atom indeces.
+        iN1 = 3 * i;
+        iCa = 3 * i + 1;
+        iC1 = 3 * i + 2;
+        iN2 = 3 * i + 3;
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[iN1], frame[iCa], vec1);
+        rvec_sub(frame[iC1], frame[iCa], vec2);
+        rvec_sub(frame[iC1], frame[iN2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[iN1], rframe[iCa], vec1);
+        rvec_sub(rframe[iC1], rframe[iCa], vec2);
+        rvec_sub(rframe[iC1], rframe[iN2], vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Square of difference of angles limited to range [-pi, +pi].
+        irang  = (double)(iang - rang);
+        if (irang >  pi12)
+        {
+            irang -= 2 * pi12;
+        }
+        if (irang < -pi12)
+        {
+            irang += 2 * pi12;
+        }
+        irang2 = irang * irang;
+        // Update phipsi sum.
+        sum_phipsi += irang2;
+        phipsi[i]  += irang2;
+    }
+    
+    // Divide by the number of angles summed and sqrt.
+    sum_phipsi  = sqrt(sum_phipsi / (2 * ((iatoms / 3) - 1)));
+    for (i = 1; i < ((iatoms / 3) - 1); i++)
+    {
+        phipsi[i] /= 2.0;
+    }
+    for (i = 0; i < (iatoms / 3); i++)
+    {
+        phipsi[i]  = sqrt(phipsi[i]);
+    }
+    // Rescale from [0, pi] to [0, 1].
+    sum_phipsi /= pi12;
+    return (real)sum_phipsi;
 }
 
 
@@ -1815,117 +2285,6 @@ real calc_msd_n(int iatoms, rvec x[], rvec xref[], real msd[])
     msdt /= iatoms;
     
     return msdt;
-}
-
-
-
-
-real calc_srms(int iatoms, rvec x[], rvec xref[])
-{
-    /*
-     * The mmsdt is the average msd between the reference and its
-     * mirrored structures mirrored around 3 planes. Used to normalize
-     * the msd value.
-     */
-    int i, j, d;
-    real xd, xdm, msdi;
-    double msdt, mmsdt;
-    
-    // Initialize to zero.
-    msdt  = 0;
-    mmsdt = 0;
-    
-    // Main loop.
-    for(i = 0; i < iatoms; i++)
-    {
-        // Copy over coordinates from xref and rotate them.
-        for(d = 0; d < 3; d++)
-        {
-            // This is the same as multiplying the reference structure by the 
-            // negative identity matrix.
-            
-            // Distance to mirrored structure.
-            xdm    = x[i][d] + xref[i][d];
-            mmsdt += xdm * xdm;
-            
-            // Calculate ith msd.
-            xd     = x[i][d] - xref[i][d];
-            msdt  += xd  * xd;
-        }
-    }
-    
-    // Normalize for number of atoms.
-    msdt  /= iatoms;
-    mmsdt /= iatoms;
-    
-    // Scale by the mirrored reference msd.
-    msdt /= mmsdt;
-    
-    return (real)sqrt(msdt);
-}
-
-
-
-real calc_srms_n(int iatoms, rvec x[], rvec xref[], real msd[])
-{
-    /*
-     * The mirror_msd is the average msd between the reference and its
-     * mirrored structures mirrored around 3 planes. Used to normalize
-     * the msd value.
-     */
-    int i, j, d;
-    real xd, xd1, xd2, msdt, msdi, mirror_msd;
-    
-    // Initialize to zero.
-    msdt = 0;
-    mirror_msd = 0;
-    
-    // Main loop.
-    for(i = 0; i < iatoms; i++)
-    {
-        // Initialize ith sum to zero.
-        msdi = 0;
-        // Copy over coordinates from xref and rotate them.
-        for(d = 0; d < 3; d++)
-        {
-            /* Same as multiplication by (-1,-1,-1) diag matrix.
-             * 
-             * d = 0: x coordinate, etc
-             * 
-             * xd1 = distances from fit coord to mirrored ref coord.
-             * xd2 = distances from ref coord to mirrored fit coord.
-             * 
-             * Originally this did something slightly different. Now it's
-             * pointless to separate xd1 and xd2.
-             * 
-             * Changing this. Since xd1^2 = xd2^2, most of the following
-             * is unnecessary. I'll leave the lines of code in case we
-             * want to change the scaling to something else.
-             */
-            xd1 = x[i][d] + xref[i][d];
-            //xd2 = -1 * xd1;
-            // Add to the sum.
-            mirror_msd += xd1 * xd1; // + xd2 * xd2
-            
-            // Calculate ith msd.
-            xd = x[i][d] - xref[i][d];
-            msdi += xd * xd;
-        }
-        msdt  += msdi;
-    }
-    
-    // Normalize for number of atoms.
-    msdt /= iatoms;
-    mirror_msd /= iatoms;
-    /* Divide by two since both ref and fit structure are used as a mirrored
-     * reference. (No longer necessary due to changes above.)
-     */
-    //mirror_msd /= 2;
-    
-    // Scale by the mirrored reference msd.
-    msdt /= mirror_msd;
-    
-    return sqrt(msdt);
 }
 
 
@@ -2216,13 +2575,15 @@ real calc_esa(int iatoms,rvec frame[],rvec rframe[])
     return (real)esa_analysis(iatoms,frame,rframe,200);
 }
 
+
+
 real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
 {
     // Default behavior (no -ISDM option) is RMSD.
     if (strcmp(ISDM, "RMSD") == 0)
     {
         // Calculate RMSD.
-        return sqrt(calc_msd(iatoms, cframe, rframe));
+        return calc_rmsd(iatoms, cframe, rframe);
     }
     
     // Scaled RMSD. User gives -srms option.
