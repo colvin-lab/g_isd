@@ -167,8 +167,9 @@ int gmx_isdcalc(int argc,char *argv[])
     rvec       *x, *iframe, *jframe, *rframe, *cframe, rrot_xyz, xold;
     rvec       **frames, *topframe, *trjframe;
     real       *nweights, *iweights;
-    real       ISD, maxISD, avgISD, varISD, msqi;
-    real       *diff, *maxdiff, *avgdiff, *vardiff;
+    real       ISD, *diff;
+    double     dISD, maxISD, avgISD, varISD, msqi;
+    double     *maxdiff, *avgdiff, *vardiff;
     matrix     box, rrot, rrotx, rroty, rrotz;
     real       t, pi = 3.14159265358979;
     int        *maxframe, *rnum;
@@ -517,19 +518,12 @@ int gmx_isdcalc(int argc,char *argv[])
     snew(iweights,iatoms);
     snew(diff,iatoms);
     
-    // Initialize nweights to zeros. Redundant.
-    for (i=0; i<natoms; i++)
-    {
-        nweights[i] = 0;
-    }
     // Makes an array of weights. Necessary for reset_x.
     for (i=0; i<iatoms; i++)
     {
         // Give a value for the weights.
-        nweights[(int)index[i]] = 1;
-        iweights[i] = 1;
-        // While we're at it, initialize diff to zeros.
-        diff[i] = 0;
+        nweights[(int)index[i]] = 1.0;
+        iweights[i] = 1.0;
     }
     
     
@@ -839,11 +833,12 @@ int gmx_isdcalc(int argc,char *argv[])
     // Only allocate if variance is being calculated.
     if (bVar)
     {
+        varISD = 0.0;
         snew(vardiff, nframes);
     }
     // Initialize output to 0.
-    maxISD = 0;
-    avgISD = 0;
+    maxISD = 0.0;
+    avgISD = 0.0;
     
     
     
@@ -996,19 +991,20 @@ int gmx_isdcalc(int argc,char *argv[])
             }
             
             
-            // Update sum for the means of ith frame.
-            avgdiff[i] += ISD;
-            // Update the max for ith frame.
-            if (ISD > maxdiff[i])
+            // Calculate summations with doubles for improved accuracy.
+            dISD = (double)ISD;
+            // Update mean and max.
+            avgdiff[i] += dISD;
+            if (dISD > maxdiff[i])
             {
-                maxdiff[i]  = ISD;
+                maxdiff[i]  = dISD;
                 maxframe[i] = j;
             }
             
             // If calculating variance, calculate the sum of squares.
             if (bVar)
             {
-                vardiff[i] += (ISD * ISD);
+                vardiff[i] += (dISD * dISD);
             }
         }
         
