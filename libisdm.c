@@ -552,6 +552,7 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
     int i;
     rvec vec1, vec2;
     double irang, irang2, sum_angs;
+    double pi20 = 3.14159265358979323846;
     real iang, rang;
     
     sum_angs = 0.0;
@@ -582,7 +583,7 @@ real calc_ang2(int iatoms, rvec frame[], rvec rframe[])
     // Divide by n - 2 angles and take the root.
     sum_angs  = sqrt(sum_angs / (iatoms - 2));
     // Rescale from [0, pi] to [0, 1].
-    sum_angs /= 3.14159265359;
+    sum_angs /= pi20;
     // Finished.
     return (real)sum_angs;
 }
@@ -600,7 +601,8 @@ real calc_ang2_n(int iatoms, rvec frame[], rvec rframe[], real ang[])
     // Initializing variables.
     int i;
     rvec vec1, vec2;
-    double irang, irang2, sum_angs, pi12 = 3.14159265359;
+    double irang, irang2, sum_angs;
+    double pi20 = 3.14159265358979323846;
     real iang, rang;
     
     sum_angs        = 0.0;
@@ -626,7 +628,7 @@ real calc_ang2_n(int iatoms, rvec frame[], rvec rframe[], real ang[])
         irang  = (double)(iang - rang);
         irang2 = irang * irang;
         // Square root and rescale. Reusing variable irang.
-        irang     = sqrt(irang2) / pi12;
+        irang     = sqrt(irang2) / pi20;
         ang[i]    = (real)irang;
         // Update sum.
         sum_angs += irang;
@@ -828,7 +830,8 @@ real calc_dih2(int iatoms, rvec frame[], rvec rframe[])
     
     // Initializing variables.
     int i;
-    double dihi, dihi2, sum_dihs, pi12 = 3.14159265359;
+    double dihi, dihi2, sum_dihs;
+    double pi20 = 3.14159265358979323846;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
@@ -887,13 +890,13 @@ real calc_dih2(int iatoms, rvec frame[], rvec rframe[])
         // Solve for (iang - rang) ^ 2.
         dihi  = (double)(iang - rang);
         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-        if (dihi > pi12)
+        if (dihi > pi20)
         {
-            dihi -= 2 * pi12;
+            dihi -= 2 * pi20;
         }
-        else if (dihi < -pi12)
+        else if (dihi < -pi20)
         {
-            dihi += 2 * pi12;
+            dihi += 2 * pi20;
         }
         dihi2 = dihi * dihi;
         // Update sum.
@@ -903,7 +906,7 @@ real calc_dih2(int iatoms, rvec frame[], rvec rframe[])
     // Divide by n - 3 and take sqrt.
     sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
     // Rescale from [0, pi] to [0, 1].
-    sum_dihs /= pi12;
+    sum_dihs /= pi20;
     // Finished.
     return (real)sum_dihs;
 }
@@ -920,7 +923,8 @@ real calc_dih2_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
     
     // Initializing variables.
     int i;
-    double dihi, dihi2, sum_dihs, pi12 = 3.14159265359;
+    double dihi, dihi2, sum_dihs;
+    double pi20 = 3.14159265358979323846;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
@@ -983,17 +987,17 @@ real calc_dih2_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
         // Solve for (iang - rang) ^ 2.
         dihi  = (double)(iang - rang);
         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-        if (dihi > pi12)
+        if (dihi > pi20)
         {
-            dihi -= 2 * pi12;
+            dihi -= 2 * pi20;
         }
-        else if (dihi < -pi12)
+        else if (dihi < -pi20)
         {
-            dihi += 2 * pi12;
+            dihi += 2 * pi20;
         }
         dihi2 = dihi * dihi;
         // Take root, rescale, and update output. Reusing variable dihi.
-        dihi        = sqrt(dihi2) / pi12;
+        dihi        = sqrt(dihi2) / pi20;
         // Array dih stores the means of two dihedral angles.
         dih[i - 1] += (real)dihi;
         dih[i - 2] += (real)dihi;
@@ -1004,7 +1008,7 @@ real calc_dih2_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
     // Divide by n - 3 and take sqrt.
     sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
     // Rescale from [0, pi] to [0, 1].
-    sum_dihs /= pi12;
+    sum_dihs /= pi20;
     // Array dih stores the means of two dihedral angles.
     // *** First and last indeces = 0.0.
     // *** Second and second last indeces only include one dihedral angle.
@@ -1027,7 +1031,7 @@ real calc_angdih(int iatoms, rvec frame[], rvec rframe[])
     }
     // Initializing variables.
     int i;
-    double pi12 = 3.14159265359;
+    double pi20 = 3.14159265358979323846;
     double cosx, cosx2, cosy, cosy2, cosxy, sum_angs, sum_dihs;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
@@ -1155,7 +1159,7 @@ real calc_angdih_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
     }
     // Initializing variables.
     int i;
-    double pi12 = 3.14159265359;
+    double pi20 = 3.14159265358979323846;
     double cosx, cosx2, cosy, cosy2, cosxy, sum_angs, sum_dihs;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
@@ -1287,7 +1291,7 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_multi)
     }
     // Initializing variables.
     int i;
-    double pi12   = 3.14159265359;
+    double pi20 = 3.14159265358979323846;
     double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
     double sum_denom;
     rvec vec1, vec2, vec3, pvec1, pvec2;
@@ -1373,13 +1377,13 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_multi)
         // Solve for the difference between the two angles.
         dihi  = (double)(iang - rang);
         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-        if (dihi > pi12)
+        if (dihi > pi20)
         {
-            dihi -= 2 * pi12;
+            dihi -= 2 * pi20;
         }
-        else if (dihi < -pi12)
+        else if (dihi < -pi20)
         {
-            dihi += 2 * pi12;
+            dihi += 2 * pi20;
         }
         dihi2 = dihi * dihi;
         // Update sum.
@@ -1391,7 +1395,7 @@ real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_multi)
     // Divide by angles summed and take sqrt.
     sum_angdih  = sqrt((sum_angs + sum_dihs) / sum_denom);
     // Rescale from [0, pi] to [0, 1].
-    sum_angdih /= pi12;
+    sum_angdih /= pi20;
     // Output.
     return (real)sum_angdih;
 }
@@ -1407,7 +1411,7 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
     }
     // Initializing variables.
     int i;
-    double pi12   = 3.14159265359;
+    double pi20 = 3.14159265358979323846;
     double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
     double sum_denom;
     rvec vec1, vec2, vec3, pvec1, pvec2;
@@ -1472,13 +1476,13 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
         // Solve for the difference between the two angles.
         dihi  = (double)(iang - rang);
         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-        if (dihi > pi12)
+        if (dihi > pi20)
         {
-            dihi -= 2 * pi12;
+            dihi -= 2 * pi20;
         }
-        else if (dihi < -pi12)
+        else if (dihi < -pi20)
         {
-            dihi += 2 * pi12;
+            dihi += 2 * pi20;
         }
         dihi2 = dihi * dihi;
         // Update output array.
@@ -1530,14 +1534,14 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
         // Take sqrt.
         angdih[i]  = sqrt(angdih[i]);
         // Rescale from [0, pi] to [0, 1].
-        angdih[i] /= pi12;
+        angdih[i] /= pi20;
     }
     // Calculate denominator based on the number of angles summed.
     sum_denom   = (ang_multi + 1.0) * iatoms - (2.0 * ang_multi - 3.0); 
     // Divide by angles summed and take sqrt.
     sum_angdih  = sqrt((sum_angs + sum_dihs) / sum_denom);
     // Rescale from [0, pi] to [0, 1].
-    sum_angdih /= pi12;
+    sum_angdih /= pi20;
     // Output.
     return (real)sum_angdih;
 }
@@ -1884,7 +1888,8 @@ real calc_phipsi2(int iatoms, rvec frame[], rvec rframe[])
     
     // Initializing variables.
     int i, iC1 ,iC2, iN1, iN2, iCa;
-    double irang, irang2, sum_phipsi, pi12 = 3.14159265359;
+    double irang, irang2, sum_phipsi;
+    double pi20 = 3.14159265358979323846;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
@@ -1947,13 +1952,13 @@ real calc_phipsi2(int iatoms, rvec frame[], rvec rframe[])
         }
         // Square the difference.
         irang  = (double)(iang - rang);
-        if (irang >  pi12)
+        if (irang >  pi20)
         {
-            irang -= 2 * pi12;
+            irang -= 2 * pi20;
         }
-        if (irang < -pi12)
+        if (irang < -pi20)
         {
-            irang += 2 * pi12;
+            irang += 2 * pi20;
         }
         irang2 = irang * irang;
         // Update phipsi sum.
@@ -2018,13 +2023,13 @@ real calc_phipsi2(int iatoms, rvec frame[], rvec rframe[])
         }
         // Square of difference of angles limited to range [-pi, +pi].
         irang  = (double)(iang - rang);
-        if (irang >  pi12)
+        if (irang >  pi20)
         {
-            irang -= 2 * pi12;
+            irang -= 2 * pi20;
         }
-        if (irang < -pi12)
+        if (irang < -pi20)
         {
-            irang += 2 * pi12;
+            irang += 2 * pi20;
         }
         irang2 = irang * irang;
         // Update phipsi sum.
@@ -2034,7 +2039,7 @@ real calc_phipsi2(int iatoms, rvec frame[], rvec rframe[])
     // Divide by the number of angles summed and sqrt.
     sum_phipsi  = sqrt(sum_phipsi / (2 * ((iatoms / 3) - 1)));
     // Rescale from [0, pi] to [0, 1].
-    sum_phipsi /= pi12;
+    sum_phipsi /= pi20;
     return (real)sum_phipsi;
 }
 
@@ -2050,7 +2055,8 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
     
     // Initializing variables.
     int i, iC1 ,iC2, iN1, iN2, iCa;
-    double irang, irang2, sum_phipsi, pi12 = 3.14159265359;
+    double irang, irang2, sum_phipsi;
+    double pi20 = 3.14159265358979323846;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
@@ -2117,13 +2123,13 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         }
         // Square the difference.
         irang  = (double)(iang - rang);
-        if (irang >  pi12)
+        if (irang >  pi20)
         {
-            irang -= 2 * pi12;
+            irang -= 2 * pi20;
         }
-        if (irang < -pi12)
+        if (irang < -pi20)
         {
-            irang += 2 * pi12;
+            irang += 2 * pi20;
         }
         irang2 = irang * irang;
         // Update phipsi sum.
@@ -2189,13 +2195,13 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         }
         // Square of difference of angles limited to range [-pi, +pi].
         irang  = (double)(iang - rang);
-        if (irang >  pi12)
+        if (irang >  pi20)
         {
-            irang -= 2 * pi12;
+            irang -= 2 * pi20;
         }
-        if (irang < -pi12)
+        if (irang < -pi20)
         {
-            irang += 2 * pi12;
+            irang += 2 * pi20;
         }
         irang2 = irang * irang;
         // Update phipsi sum.
@@ -2214,7 +2220,7 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         phipsi[i]  = sqrt(phipsi[i]);
     }
     // Rescale from [0, pi] to [0, 1].
-    sum_phipsi /= pi12;
+    sum_phipsi /= pi20;
     return (real)sum_phipsi;
 }
 
