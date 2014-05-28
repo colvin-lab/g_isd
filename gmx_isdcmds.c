@@ -72,7 +72,7 @@ void scl_mult_mat(real scl, real* mat, int m, int n, real* out)
 
 void mat_transpose(real* mat, int m,int n, real* out)
 {
-    /* Transpose m by n array of doubles a into n by m array of doubles out.
+    /* Transpose m by n array of reals a into n by m array of reals out.
      */
     int i, j;
     
@@ -81,6 +81,78 @@ void mat_transpose(real* mat, int m,int n, real* out)
             out[(j * n) + i] = mat[(i * m) + j];
         }
     }
+}
+
+
+
+void calc_EISD(real** MDS, int nframes, int d, real** EISD)
+{
+    /* Calculate the approximate ISD from the euclidean dimensionally reduced 
+     * coordinates in MDS. Uses the number of dimensions specified by d. The 
+     * number of structures is specified by nframes, and EISD should be a 
+     * matrix of nframes x nframes.
+     */
+    int  i, j, k;
+    real kEISD;
+    for (i = 0; i < nframes; i++)
+    {
+        for (j = 0; j < nframes; j++)
+        {
+            // Same structure.
+            if (i == j)
+            {
+                EISD[i][j] = 0.0;
+                continue;
+            }
+            
+            // Different structures.
+            EISD[i][j] = 0.0;
+            for (k = 0; k < d; k++)
+            {
+                kEISD        = MDS[i][k] - MDS[j][k];
+                EISD[i][j]  += kEISD * kEISD;
+            }
+            EISD[i][j] = sqrt(EISD[i][j]);
+        }
+    }
+}
+
+
+
+real calc_rcc(real** ISD, real** EISD, int nframes)
+{
+    int i, j;
+    int N = nframes * (nframes - 1) / 2;
+    real sCov, sISD, sEISD, sISD2, sEISD2, mISD, mEISD, vISD, vEISD;
+    sCov = 0.0; sISD = 0.0; sEISD = 0.0; sISD2 = 0.0; sEISD2 = 0.0;
+    
+    // Variances, means, and the means of squares.
+    for (i = 0; i < (nframes - 1); i++)
+    {
+        for (j = (i + 1); j < nframes; j++)
+        {
+            sISD   += ISD[i][j];
+            sEISD  += EISD[i][j];
+            sISD2  += ISD[i][j]  * ISD[i][j];
+            sEISD2 += EISD[i][j] * EISD[i][j];
+        }
+    }
+    mISD  = sISD  / N;
+    mEISD = sEISD / N;
+    vISD  = (sISD2  / N) - (mISD  * mISD);
+    vEISD = (sEISD2 / N) - (mEISD * mEISD);
+    
+    // Covariance.
+    for (i = 0; i < (nframes - 1); i++)
+    {
+        for (j = (i + 1); j < nframes; j++)
+        {
+            sCov += (ISD[i][j] - mISD) * (EISD[i][j] - mEISD);
+        }
+    }
+    
+    // Correlation coefficient, R.
+    return (sCov / N) / (sqrt(vISD) * sqrt(vEISD));
 }
 
 
@@ -103,7 +175,7 @@ int gmx_isdcmds(int argc,char *argv[])
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE;
-    static real setmax = -1.0;
+    static real setmax = -1.0; static real rcutoff = 100.0;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
             "ISDM: Mean cosine of difference of backbone angles for each "
@@ -178,6 +250,11 @@ int gmx_isdcmds(int argc,char *argv[])
         { "-setmax", FALSE, etREAL, {&setmax},
             "Set maximum value to threshold the xpm file. Must be greater "
             "than the average inter-structure distance." },
+        { "-rcutoff", FALSE, etREAL, {&rcutoff},
+            "Set cutoff value for the correlation coefficient. Only applies "
+            "if the -rcc output is set. The correlation coefficient (R) "
+            "will be calculated for each dimensional until rcutoff is "
+            "reached. The value should be between 0 and 1." },
     };
     
     
@@ -189,15 +266,15 @@ int gmx_isdcmds(int argc,char *argv[])
     rvec       *x, *iframe, *jframe, *rframe, *cframe, rrot_xyz, xold;
     rvec       **frames;
     real       *nweights, *iweights, abscoor, maxcoor;
-    real       *diff, ISD, **ISDmat, *P2, *J, *P2J, *B, *BT, *E, *V, *MDS;
-    real       **Va, **MDSa;
+    real       *diff, ISD, **ISDmat, *P2, *J, *P2J, *B, *BT, *E, *V, *MDSa;
+    real       **Va, **MDS, **EISD, *EISDm, Rcc;
     double     dISD, *avgdiff, avgISD, maxISD;
     matrix     box, rrot, rrotx, rroty, rrotz;
     real       t, xpm_max, pi = 3.14159265358979;
     int        *maxframe, *rnum, maxcoori;
-    int        i, j, k, m, n, p, np, iatoms, natoms, nframes;
+    int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes;
     int        percentcalcs, noptions;
-    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec;
+    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bPy;
     char       buf[256];
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -210,9 +287,11 @@ int gmx_isdcmds(int argc,char *argv[])
         { efTPS, NULL,   NULL,       ffREAD },
         { efNDX, NULL,   NULL,       ffOPTRD },
         { efXVG, "-eig", "eigvals",  ffOPTWR },
+        { efXVG, "-rcc", "corrcoef", ffOPTWR },
         { efDAT, "-vec", "eigvecs",  ffOPTWR },
         { efDAT, "-isd", "isdcsv",   ffOPTWR },
         { efDAT, "-mds", "mdscsv",   ffOPTWR },
+        { efDAT, "-py",  "mayapy",   ffOPTWR },
     }; 
 #define NFILE asize(fnm)
     int npargs;
@@ -548,9 +627,11 @@ int gmx_isdcmds(int argc,char *argv[])
     
     // Output which files?
     bEig = opt2bSet("-eig", NFILE, fnm);
+    bRcc = opt2bSet("-rcc", NFILE, fnm);
     bVec = opt2bSet("-vec", NFILE, fnm);
     bISD = opt2bSet("-isd", NFILE, fnm);
     bMDS = opt2bSet("-mds", NFILE, fnm);
+    bPy  = opt2bSet("-py",  NFILE, fnm);
     
     
     nframes = 0;
@@ -928,17 +1009,17 @@ int gmx_isdcmds(int argc,char *argv[])
         }
     }
     // Save coordinates in reduced dimensions.
-    snew(MDS,  nframes * np);
-    snew(MDSa, nframes);
+    snew(MDSa,  nframes * np);
+    snew(MDS,   nframes);
     for (i = 0; i < nframes; i++)
     {
-        MDSa[i] = &MDS[np * i];
+        MDS[i] = &MDSa[np * i];
     }
     for (i = 0; i < nframes; i++)
     {
         for (j = 0; j < np; j++)
         {
-            MDSa[i][j] = sqrt(E[nframes - j - 1]) * Va[nframes - j - 1][i];
+            MDS[i][j] = sqrt(E[nframes - j - 1]) * Va[nframes - j - 1][i];
         }
     }
     
@@ -949,7 +1030,7 @@ int gmx_isdcmds(int argc,char *argv[])
         maxcoor = -1.0;
         for (i = 0; i < nframes; i++)
         {
-            abscoor = abs(MDSa[i][j]);
+            abscoor = abs(MDS[i][j]);
             if (abscoor > maxcoor)
             {
                 maxcoor  = abscoor;
@@ -957,35 +1038,13 @@ int gmx_isdcmds(int argc,char *argv[])
             }
         }
         
-        if (MDSa[maxcoori][j] < 0.0)
+        if (MDS[maxcoori][j] < 0.0)
         {
             for (i = 0; i < nframes; i++)
             {
-                MDSa[i][j] *= -1.0;
+                MDS[i][j] *= -1.0;
             }
         }
-    }
-    fprintf(stderr, "\nMDS Complete. \n\n");
-    
-    // Output dimensionally reduced coordinates.
-    if (bMDS)
-    {
-        // Opens the output file.
-        out = opt2FILE("-mds", NFILE, fnm, "w");
-        
-        // Write output.
-        for (i = 0; i < nframes; i++)
-        {
-            fprintf(out, "%15.6e", MDSa[i][0]);
-            for (j = 1; j < np; j++)
-            {
-                fprintf(out, ",%15.6e", MDSa[i][j]);
-            }
-            fprintf(out, "\n");
-        }
-        
-        // Close the output file.
-        ffclose(out);
     }
     
     // Output the eigenvectors.
@@ -1029,6 +1088,95 @@ int gmx_isdcmds(int argc,char *argv[])
         // Close the output file.
         ffclose(out);
     }
+    
+    // Release memory.
+    sfree(J);
+    sfree(P2);
+    sfree(P2J);
+    sfree(V);
+    sfree(E);
+    sfree(Va);
+    fprintf(stderr, "\nMDS Complete. \n\n");
+    
+    // Output dimensionally reduced coordinates.
+    if (bMDS)
+    {
+        // Opens the output file.
+        out = opt2FILE("-mds", NFILE, fnm, "w");
+        
+        // Write output.
+        for (i = 0; i < nframes; i++)
+        {
+            fprintf(out, "%12.8f", MDS[i][0]);
+            for (j = 1; j < np; j++)
+            {
+                fprintf(out, ",%12.8f", MDS[i][j]);
+            }
+            fprintf(out, "\n");
+        }
+        
+        // Close the output file.
+        ffclose(out);
+    }
+    
+    // Reduced dimensional visualization.
+    if (bPy)
+    {
+    }
+    
+    // Allocates memory to store the approximated ISD.
+    if (bRcc)
+    {
+        snew(EISD,  nframes);
+        snew(EISDm, nframes * nframes);
+        for (i = 0; i < nframes; i++)
+        {
+            EISD[i] = &EISDm[nframes * i];
+        }
+    }
+    
+    // Tests the accuracy of the dimensionally reduced coordinates.
+    if (bRcc)
+    {
+        // Error checking for rcutoff.
+        if (rcutoff < 0.0)
+        {
+            gmx_fatal(FARGS,"\nThe argument for -rcutoff must be greater "
+                            "than or equal to 0.\n");
+        }
+        fprintf(stderr, "\nCalculating accuracy of dimensionality reduction. "
+                        "\n");
+        
+        // Opens the output file.
+        out = xvgropen(opt2fn("-rcc", NFILE, fnm), 
+                      "Accuracy of Dimensionality Reduction", 
+                      "Dimension", 
+                      "Correlation Coefficient, R", 
+                      oenv);
+        
+        for (d = 1; d <= np; d++)
+        {
+            // Calculate correlation coefficient.
+            calc_EISD(MDS, nframes, d, EISD);
+            Rcc = calc_rcc(ISDmat, EISD, nframes);
+            
+            // Write to file.
+            fprintf(out, "%-6i %12.8f \n", i, Rcc);
+            
+            if (Rcc > rcutoff)
+            {
+                break;
+            }
+        }
+        
+        // Close file.
+        ffclose(out);
+        
+        printf("\nThe rcutoff is: %12.8f \n", rcutoff);
+        printf("The final correlation coefficient is: %12.8f \n", Rcc);
+        printf("The estimated dimensionality is: %-6i \n", d);
+    }
+    
     
     // Closing.
     thanx(stderr);
