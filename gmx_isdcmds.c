@@ -1122,6 +1122,32 @@ int gmx_isdcmds(int argc,char *argv[])
     // Reduced dimensional visualization.
     if (bPy)
     {
+        // Opens the output file.
+        out = opt2FILE("-py", NFILE, fnm, "w");
+        
+        // Import modules.
+        fprintf(out, "from mayavi import mlab\n");
+        fprintf(out, "import numpy\n\n");
+        
+        // Save data to variables.
+        fprintf(out, "numpy.array([%12.8f", MDS[0][0]);
+        for (j = 1; j < 6; j++)
+        {
+            fprintf(out, ",%12.8f", MDS[0][j]);
+        }
+        fprintf(out, "]");
+        for (i = 1; i < nframes; i++)
+        {
+            fprintf(out, ",[%12.8f", MDS[i][0]);
+            for (j = 1; j < 6; j++)
+            {
+                fprintf(out, ",%12.8f", MDS[i][j]);
+            }
+            fprintf(out, "]");
+        }
+        
+        // Close the output file.
+        ffclose(out);
     }
     
     // Allocates memory to store the approximated ISD.
