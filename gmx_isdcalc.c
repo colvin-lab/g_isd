@@ -91,7 +91,7 @@ int gmx_isdcalc(int argc,char *argv[])
         { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
             "ISDM: Mean cosine of difference of phi and psi angles. "
             "Assumes only backbone atoms." },
-        { "-phipsi", FALSE, etBOOL, {&bPHIPSI2},
+        { "-phipsi2", FALSE, etBOOL, {&bPHIPSI2},
             "ISDM: Attempts to euclideanize -phipsi." },
         { "-drms", FALSE, etBOOL, {&bDRMS},
             "ISDM: Mean difference of the paired distances matrix for all "
