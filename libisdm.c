@@ -2721,6 +2721,13 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         return calc_phipsi(iatoms, cframe, rframe);
     }
     
+    // Phi psi angles. User gives -phipsi option.
+    if (strcmp(ISDM, "PHIPSI2") == 0)
+    {
+        // Calculate dot product of difference in dihedrals.
+        return calc_phipsi2(iatoms, cframe, rframe);
+    }
+    
     // Atom to atom distances. User gives -drms option.
     if (strcmp(ISDM, "DRMS") == 0)
     {
