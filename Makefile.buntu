@@ -1,8 +1,9 @@
-### This works for the Ubuntu package of gromacs.
+### This works for a default install of gromacs from source.
 ### Gromacs library linking...
 GMXINC=/usr/include/gromacs
 GMXLIB=/usr/include/gromacs
 OPTIONS=-g -I$(GMXINC) -L$(GMXLIB)
+LIBLINKS=-lgmx -lgmxana -lm
 
 ###
 ### Basic compiler setup
@@ -12,17 +13,20 @@ CPP=g++
 F77=gfortran
 
 # Targets
-all : g_isdmap g_isdcalc g_isddecorr
+all : g_isdmap g_isdcalc g_isddecorr g_isdcmds
 
 # Executables
 g_isdmap : g_isdmap.o gmx_isdmap.o libisdm.o libesa.o
-	$(CC) $(OPTIONS) $^ -o $@ -lgmx -lgmxana
+	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
 
 g_isdcalc : g_isdcalc.o gmx_isdcalc.o libisdm.o libesa.o
-	$(CC) $(OPTIONS) $^ -o $@ -lgmx -lgmxana
+	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
 
 g_isddecorr : g_isddecorr.o gmx_isddecorr.o libisdm.o libesa.o
-	$(CC) $(OPTIONS) $^ -o $@ -lgmx -lgmxana
+	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
+
+g_isdcmds : g_isdcmds.o gmx_isdcmds.o libisdm.o libesa.o
+	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
 
 # Libraries
 
@@ -45,6 +49,12 @@ g_isddecorr.o : g_isddecorr.c
 gmx_isddecorr.o : gmx_isddecorr.c
 	$(CC) $(OPTIONS) -c $^ -o $@
 
+g_isdcmds.o : g_isdcmds.c
+	$(CC) $(OPTIONS) -c g_isdcmds.c -o $@
+
+gmx_isdcmds.o : gmx_isdcmds.c
+	$(CC) $(OPTIONS) -c $^ -o $@
+
 libisdm.o : libisdm.c
 	$(CC) $(OPTIONS) -c $^ -o $@
 
@@ -55,4 +65,4 @@ clean :
 	rm *.o
 
 dist-clean : clean
-	rm g_isdmap g_isdcalc g_isddecorr
+	rm g_isdmap g_isdcalc g_isddecorr g_isdcmds

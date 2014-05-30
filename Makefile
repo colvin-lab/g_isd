@@ -4,6 +4,8 @@ GMXINC=/usr/local/gromacs/include
 GMXLIB=/usr/local/gromacs/lib
 OPTIONS=-g -I$(GMXINC) -L$(GMXLIB)
 LIBLINKS=-lgmx -lgmxana -lm
+INSTALL_BINS=g_isdmap g_isdcalc g_isddecorr g_isdcmds
+INSTALL_PATH=$(HOME)/bin
 
 ###
 ### Basic compiler setup
@@ -66,3 +68,7 @@ clean :
 
 dist-clean : clean
 	rm g_isdmap g_isdcalc g_isddecorr g_isdcmds
+
+install :
+	mkdir -p $(INSTALL_PATH)
+	cp $(INSTALL_BINS) $(INSTALL_PATH)

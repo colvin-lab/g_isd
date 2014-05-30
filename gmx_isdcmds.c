@@ -175,7 +175,10 @@ int gmx_isdcmds(int argc,char *argv[])
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE;
-    static real setmax = -1.0; static real rcutoff = 100.0;
+    static real setmax     = -1.0;
+    static real rcutoff    =  1.1;
+    static real noisefloor =  0.0;
+    static gmx_bool bNoise = FALSE;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
             "ISDM: Mean cosine of difference of backbone angles for each "
@@ -247,6 +250,15 @@ int gmx_isdcmds(int argc,char *argv[])
             "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
             "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
             "e1001075.\n\nAssume only CA atoms." },
+        { "-noise", FALSE, etBOOL, {&bNoise},
+            "If this flag is set, additional information is sent to "
+            "stdout. The tool calculates the number of positive eigenvalues "
+            "and the number of positive eigenvalues that can be accounted "
+            "by two sources of noise. (1) Algorithmic noise based on the "
+            "negative eigenvalues, (2) thermal noise based on the expected "
+            "variation of folded proteins, and (3) the combined noise. "
+            "An estimate of thermal noise can be set manually with the "
+            "option -noisefloor." },
         { "-setmax", FALSE, etREAL, {&setmax},
             "Set maximum value to threshold the xpm file. Must be greater "
             "than the average inter-structure distance." },
@@ -255,6 +267,10 @@ int gmx_isdcmds(int argc,char *argv[])
             "if the -rcc output is set. The correlation coefficient (R) "
             "will be calculated for each dimensional until rcutoff is "
             "reached. The value should be between 0 and 1." },
+        { "-noisefloor", FALSE, etREAL, {&noisefloor},
+            "Only applies if the -noise option is set. Manually sets the "
+            "the estimate of thermal noise used by the dimensionality "
+            "estimator." },
     };
     
     
@@ -267,7 +283,7 @@ int gmx_isdcmds(int argc,char *argv[])
     rvec       **frames;
     real       *nweights, *iweights, abscoor, maxcoor;
     real       *diff, ISD, **ISDmat, *P2, *J, *P2J, *B, *BT, *E, *V, *MDSa;
-    real       **Va, **MDS, **EISD, *EISDm, Rcc;
+    real       **Va, **MDS, **EISD, *EISDm, Rcc, sumne, cumpe;
     double     dISD, *avgdiff, avgISD, maxISD;
     matrix     box, rrot, rrotx, rroty, rrotz;
     real       t, xpm_max, pi = 3.14159265358979;
@@ -1068,6 +1084,15 @@ int gmx_isdcmds(int argc,char *argv[])
         ffclose(out);
     }
     
+    // Release memory.
+    sfree(J);
+    sfree(P2);
+    sfree(P2J);
+    sfree(V);
+    sfree(Va);
+    fprintf(stderr, "\nClassical MDS Complete. \n\n");
+    
+    
     // Output the eigenvalues.
     if (bEig)
     {
@@ -1089,14 +1114,65 @@ int gmx_isdcmds(int argc,char *argv[])
         ffclose(out);
     }
     
-    // Release memory.
-    sfree(J);
-    sfree(P2);
-    sfree(P2J);
-    sfree(V);
-    sfree(E);
-    sfree(Va);
-    fprintf(stderr, "\nMDS Complete. \n\n");
+    // Estimate the number of dimensions explained by noise.
+    if (bNoise)
+    {
+        printf("\n\n");
+        printf("Positive eigenvalues correspond to real dimensions. ");
+        printf("Negative eigenvalues correspond to imaginary dimensions.\n\n");
+        
+        // Sum the positive and negative eigenvalues.
+        cumpe = 0.0;
+        for (i = p; i < nframes; i++)
+        {
+            cumpe += E[i];
+        }
+        sumne = 0.0;
+        for (i = 0; i < p; i++)
+        {
+            sumne += E[i];
+        }
+        printf("Sum of positive eigenvalues: %12.6f \n", cumpe);
+        printf("Sum of negative eigenvalues: %12.6f \n", sumne);
+        
+        
+        // Output the explained noise.
+        printf("%-6i eigenvalues are positive.\n", np);
+        printf("%-6i eigenvalues are zero or negative.\n", nframes - np);
+        cumpe = 0.0;
+        for (i = p; i < nframes; i++)
+        {
+            cumpe += E[i];
+            if (cumpe > abs(sumne))
+            {
+                break;
+            }
+        }
+        printf("%-6i positive eigenvalues can be explained by negative "
+               "eigenvalues.\n", i - p);
+        cumpe = 0.0;
+        for (i = p; i < nframes; i++)
+        {
+            cumpe += E[i];
+            if (cumpe > noisefloor)
+            {
+                break;
+            }
+        }
+        printf("%-6i positive eigenvalues can be explained by estimated "
+               "thermal noise.\n", i - p);
+        cumpe = 0.0;
+        for (i = p; i < nframes; i++)
+        {
+            cumpe += E[i];
+            if (cumpe > (abs(sumne) + noisefloor))
+            {
+                break;
+            }
+        }
+        printf("%-6i positive eigenvalues can be explained by estimated "
+               "thermal noise and algorithmic noise combined.\n\n", i - p);
+    }
     
     // Output dimensionally reduced coordinates.
     if (bMDS)
