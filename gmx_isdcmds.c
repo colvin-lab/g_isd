@@ -1206,39 +1206,8 @@ int gmx_isdcmds(int argc,char *argv[])
         ffclose(out);
     }
     
-    // Reduced dimensional visualization.
-    if (bPy)
-    {
-        // Opens the output file.
-        out = opt2FILE("-py", NFILE, fnm, "w");
-        
-        // Import modules.
-        fprintf(out, "from mayavi import mlab\n");
-        fprintf(out, "import numpy\n\n");
-        
-        // Save data to variables.
-        fprintf(out, "numpy.array([%12.8f", MDS[0][0]);
-        for (j = 1; j < 6; j++)
-        {
-            fprintf(out, ",%12.8f", MDS[0][j]);
-        }
-        fprintf(out, "]");
-        for (i = 1; i < nframes; i++)
-        {
-            fprintf(out, ",[%12.8f", MDS[i][0]);
-            for (j = 1; j < 6; j++)
-            {
-                fprintf(out, ",%12.8f", MDS[i][j]);
-            }
-            fprintf(out, "]");
-        }
-        
-        // Close the output file.
-        ffclose(out);
-    }
-    
     // Allocates memory to store the approximated ISD.
-    if (bRcc)
+    if (bRcc || bPy)
     {
         snew(EISD,  nframes);
         snew(EISDm, nframes * nframes);
@@ -1246,6 +1215,95 @@ int gmx_isdcmds(int argc,char *argv[])
         {
             EISD[i] = &EISDm[nframes * i];
         }
+    }
+    
+    // Reduced dimensional visualization.
+    if (bPy)
+    {
+        // Calculate accuracy of the displayed results.
+        calc_EISD(MDS, nframes, 6, EISD);
+        Rcc = calc_rcc(ISDmat, EISD, nframes);
+        fprintf(stdout, "The accuracy for 6D MDS is R = %8.4f.\n\n", Rcc);
+        
+        // Opens the output file.
+        out = opt2FILE("-py", NFILE, fnm, "w");
+        
+        // Python script header (py).
+        fprintf(out, "# Plots MDS output in 6 dimensions:\n");
+        fprintf(out, "# x, y, z, r, g, b\n\n");
+        
+        // Import modules (py).
+        fprintf(out, "from mayavi import mlab\n");
+        fprintf(out, "import numpy as np\n\n");
+        
+        // Save data to numpy array (py).
+        fprintf(out, "# Save data to numpy array.\n");
+        fprintf(out, "MDS = np.array([[%8.4f", MDS[0][0]);
+        for (j = 1; j < 6; j++)
+        {
+            fprintf(out, ",%8.4f", MDS[0][j]);
+        }
+        fprintf(out, "]");
+        for (i = 1; i < nframes; i++)
+        {
+            fprintf(out, ",\n                [%8.4f", MDS[i][0]);
+            for (j = 1; j < 6; j++)
+            {
+                fprintf(out, ",%8.4f", MDS[i][j]);
+            }
+            fprintf(out, "]");
+        }
+        fprintf(out, "])\n\n");
+        
+        // Calculate box center and range, center at zero (py).
+        fprintf(out, "# Calculate box center and range.\n");
+        fprintf(out, "bctr = np.mean(MDS, 1)\n");
+        fprintf(out, "bmin = np.min(MDS) #- Rbead\n");
+        fprintf(out, "bmax = np.min(MDS) #+ Rbead\n");
+        fprintf(out, "MDS  = np.substract(MDS, bctr)\n\n");
+        
+        // Split MDS by dimensions. Recenter and rescale rgb dimensions (py).
+        fprintf(out, "# Split MDS by dimensions. Recenter to 0.5.\n");
+        fprintf(out, "xyz, rgb = hsplit(MDS, 2)\n");
+        fprintf(out, "color_sf = 0.8 / (bmax - bmin)\n");
+        fprintf(out, "rgb = np.add(np.multiply(rgb, color_sf), 0.5)\n\n");
+        
+        // Display first coordinate and set up figure (py).
+        fprintf(out, "# Display first coordinate and set up figure.\n");
+        fprintf(out, "x = xyz[0, 0]\n");
+        fprintf(out, "y = xyz[0, 1]\n");
+        fprintf(out, "z = xyz[0, 2]\n");
+        fprintf(out, "r = rgb[0, 0]\n");
+        fprintf(out, "g = rgb[0, 1]\n");
+        fprintf(out, "b = rgb[0, 2]\n");
+        fprintf(out, "if r > 1.0\n    r = 1.0\n");
+        fprintf(out, "if r < 0.0\n    r = 0.0\n");
+        fprintf(out, "if g > 1.0\n    g = 1.0\n");
+        fprintf(out, "if g < 0.0\n    g = 0.0\n");
+        fprintf(out, "if b > 1.0\n    b = 1.0\n");
+        fprintf(out, "if b < 0.0\n    b = 0.0\n");
+        fprintf(out, "mlab.points3d(x, y, z, color=(r, g, b), ");
+        fprintf(out, "extent=[bmin, bmax, bmin, bmax, bmin, bmax])\n\n");
+        
+        // Display coordinates (py).
+        fprintf(out, "# Display coordinates.\n");
+        fprintf(out, "for i in range(1, %i):\n", nframes);
+        fprintf(out, "    x = xyz[i, 0]\n");
+        fprintf(out, "    y = xyz[i, 1]\n");
+        fprintf(out, "    z = xyz[i, 2]\n");
+        fprintf(out, "    r = rgb[i, 0]\n");
+        fprintf(out, "    g = rgb[i, 1]\n");
+        fprintf(out, "    b = rgb[i, 2]\n");
+        fprintf(out, "    if r > 1.0\n        r = 1.0\n");
+        fprintf(out, "    if r < 0.0\n        r = 0.0\n");
+        fprintf(out, "    if g > 1.0\n        g = 1.0\n");
+        fprintf(out, "    if g < 0.0\n        g = 0.0\n");
+        fprintf(out, "    if b > 1.0\n        b = 1.0\n");
+        fprintf(out, "    if b < 0.0\n        b = 0.0\n");
+        fprintf(out, "    mlab.points3d(x, y, z, color=(r, g, b))\n\n");
+        
+        // Close the output file.
+        ffclose(out);
     }
     
     // Tests the accuracy of the dimensionally reduced coordinates.

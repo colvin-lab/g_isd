@@ -2704,7 +2704,7 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
     if (strcmp(ISDM, "ANGDIH2") == 0)
     {
         // Combination of ang and dih.
-        return calc_angdih2(iatoms, cframe, rframe, 1.0);
+        return calc_angdih2(iatoms, cframe, rframe, 2.0);
     }
     
     // Combination of ang and dih. User gives -angdih2m option.
