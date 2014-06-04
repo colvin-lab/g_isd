@@ -1257,17 +1257,20 @@ int gmx_isdcmds(int argc,char *argv[])
         
         // Calculate box center and range, center at zero (py).
         fprintf(out, "# Calculate box center and range.\n");
-        fprintf(out, "bctr = np.mean(MDS, 1)\n");
+        fprintf(out, "bctr = np.mean(MDS, 0)\n");
+        fprintf(out, "MDS  = np.subtract(MDS, bctr)\n");
         fprintf(out, "bmin = np.min(MDS) #- Rbead\n");
-        fprintf(out, "bmax = np.min(MDS) #+ Rbead\n");
-        fprintf(out, "MDS  = np.substract(MDS, bctr)\n\n");
+        fprintf(out, "bmax = np.max(MDS) #+ Rbead\n\n");
         
         // Split MDS by dimensions. Recenter and rescale rgb dimensions (py).
         fprintf(out, "# Split MDS by dimensions. Recenter to 0.5.\n");
-        fprintf(out, "xyz, rgb = hsplit(MDS, 2)\n");
+        fprintf(out, "xyz, rgb = np.hsplit(MDS, 2)\n");
         fprintf(out, "color_sf = 0.8 / (bmax - bmin)\n");
-        fprintf(out, "rgb = np.add(np.multiply(rgb, color_sf), 0.5)\n\n");
+        fprintf(out, "rgb = np.add(np.multiply(rgb, color_sf), 0.5)\n");
+        fprintf(out, "s = np.array([0.01])\n");
+        fprintf(out, "s = s[0]\n\n");
         
+        /*
         // Display first coordinate and set up figure (py).
         fprintf(out, "# Display first coordinate and set up figure.\n");
         fprintf(out, "x = xyz[0, 0]\n");
@@ -1276,31 +1279,32 @@ int gmx_isdcmds(int argc,char *argv[])
         fprintf(out, "r = rgb[0, 0]\n");
         fprintf(out, "g = rgb[0, 1]\n");
         fprintf(out, "b = rgb[0, 2]\n");
-        fprintf(out, "if r > 1.0\n    r = 1.0\n");
-        fprintf(out, "if r < 0.0\n    r = 0.0\n");
-        fprintf(out, "if g > 1.0\n    g = 1.0\n");
-        fprintf(out, "if g < 0.0\n    g = 0.0\n");
-        fprintf(out, "if b > 1.0\n    b = 1.0\n");
-        fprintf(out, "if b < 0.0\n    b = 0.0\n");
+        fprintf(out, "if r > 1.0:\n    r = 1.0\n");
+        fprintf(out, "if r < 0.0:\n    r = 0.0\n");
+        fprintf(out, "if g > 1.0:\n    g = 1.0\n");
+        fprintf(out, "if g < 0.0:\n    g = 0.0\n");
+        fprintf(out, "if b > 1.0:\n    b = 1.0\n");
+        fprintf(out, "if b < 0.0:\n    b = 0.0\n");
         fprintf(out, "mlab.points3d(x, y, z, color=(r, g, b), ");
         fprintf(out, "extent=[bmin, bmax, bmin, bmax, bmin, bmax])\n\n");
+        */
         
         // Display coordinates (py).
         fprintf(out, "# Display coordinates.\n");
-        fprintf(out, "for i in range(1, %i):\n", nframes);
+        fprintf(out, "for i in range(0, %i):\n", nframes);
         fprintf(out, "    x = xyz[i, 0]\n");
         fprintf(out, "    y = xyz[i, 1]\n");
         fprintf(out, "    z = xyz[i, 2]\n");
         fprintf(out, "    r = rgb[i, 0]\n");
         fprintf(out, "    g = rgb[i, 1]\n");
         fprintf(out, "    b = rgb[i, 2]\n");
-        fprintf(out, "    if r > 1.0\n        r = 1.0\n");
-        fprintf(out, "    if r < 0.0\n        r = 0.0\n");
-        fprintf(out, "    if g > 1.0\n        g = 1.0\n");
-        fprintf(out, "    if g < 0.0\n        g = 0.0\n");
-        fprintf(out, "    if b > 1.0\n        b = 1.0\n");
-        fprintf(out, "    if b < 0.0\n        b = 0.0\n");
-        fprintf(out, "    mlab.points3d(x, y, z, color=(r, g, b))\n\n");
+        fprintf(out, "    if r > 1.0:\n        r = 1.0\n");
+        fprintf(out, "    if r < 0.0:\n        r = 0.0\n");
+        fprintf(out, "    if g > 1.0:\n        g = 1.0\n");
+        fprintf(out, "    if g < 0.0:\n        g = 0.0\n");
+        fprintf(out, "    if b > 1.0:\n        b = 1.0\n");
+        fprintf(out, "    if b < 0.0:\n        b = 0.0\n");
+        fprintf(out, "    mlab.points3d(x, y, z, s, color=(r, g, b), scale_factor=1)\n\n");
         
         // Close the output file.
         ffclose(out);
