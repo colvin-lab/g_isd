@@ -79,6 +79,8 @@ extern real calc_angdih2(int iatoms, rvec frame[], rvec rframe[], double ang_mul
 
 extern real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih2[], double ang_multi);
 
+extern real calc_angdih2g(int iatoms, rvec frame[], rvec rframe[]);
+
 extern real calc_phipsi(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[]);
