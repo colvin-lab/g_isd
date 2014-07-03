@@ -81,6 +81,8 @@ extern real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih2
 
 extern real calc_angdih2g(int iatoms, rvec frame[], rvec rframe[]);
 
+extern real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[]);
+
 extern real calc_phipsi(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[]);
@@ -104,3 +106,5 @@ extern real calc_mammoth(int iatoms, rvec frame[], rvec rframe[], int *rnum);
 extern real calc_esa(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM);
+
+extern real call_ISDM_n(int iatoms, rvec cframe[], rvec rframe[], real rISD[], const char *ISDM);

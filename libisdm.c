@@ -1666,6 +1666,150 @@ real calc_angdih2g(int iatoms, rvec frame[], rvec rframe[])
 
 
 
+real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
+{
+    // Returns the root mean of the squared difference of angles.
+    // Error checking.
+    if (iatoms < 6)
+    {
+        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_angdih.");
+    }
+    // Initializing variables.
+    int i;
+    double pi20 = 3.14159265358979323846;
+    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
+    double sum_denom;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+    real iang, rang;
+    
+    sum_angs = 0.0; sum_dihs = 0.0;
+    for (i = 0; i < iatoms; i++)
+    {
+        angdih[i] = 0.0;
+    }
+    // There are n - 3 dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        iang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iang *= -1.0;
+        }
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+        // Find the angle between plane vectors.
+        rang = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rang *= -1.0;
+        }
+        // Solve for the difference between the two angles.
+        dihi  = (double)(iang - rang);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dihi > pi20)
+        {
+            dihi -= 2 * pi20;
+        }
+        else if (dihi < -pi20)
+        {
+            dihi += 2 * pi20;
+        }
+        dihi2 = dihi * dihi;
+        // Update output array.
+        angdih[i - 2] += (real)dihi2;
+        angdih[i - 1] += (real)dihi2;
+        // Update sum.
+        sum_dihs += dihi2;
+    }
+    
+    // The dih portion of angdih stores the means of two dihedral angles.
+    // *** First and last indeces = 0.0.
+    // *** Second and second last indeces only include one dihedral angle.
+    angdih[1] = sqrt(angdih[1]);
+    angdih[(iatoms - 2)] = sqrt(angdih[(iatoms - 2)]);
+    for (i = 2; i < (iatoms - 2); i++)
+    {
+        angdih[i] = sqrt(angdih[i] / 2.0);
+    }
+    
+    // There are n - 2 backbone angles.
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        /* Find the angle between consecutive pairs of backbone atoms.
+         */
+        rvec_sub(frame[i - 1],  frame[i], vec1);
+        rvec_sub(frame[i + 1],  frame[i], vec2);
+        iang   = gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 1], rframe[i], vec1);
+        rvec_sub(rframe[i + 1], rframe[i], vec2);
+        rang   = gmx_angle(vec1, vec2);
+        
+        // Squared difference of angles.
+        irang      = iang - rang;
+        irang2     = irang * irang;
+        angdih[i] *= (real)sqrt(irang2);
+        // Update sum.
+        sum_angs  += irang2;
+    }
+    
+    // Finalize output array.
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        // Geometric mean of ang and dih.
+        angdih[i]  = sqrt(angdih[i]);
+        // Rescale from [0, pi] to [0, 1].
+        angdih[i] /= pi20;
+    }
+    
+    // Divide by angles summed.
+    sum_angs   /= iatoms - 2;
+    sum_dihs   /= iatoms - 3;
+    // Geometric mean.
+    sum_angdih  = sqrt(sqrt(sum_angs) * sqrt(sum_dihs));
+    // Rescale from [0, pi] to [0, 1].
+    sum_angdih /= pi20;
+    // Output.
+    return (real)sum_angdih;
+}
+
+
+
 real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
 {
     // Error checking.
@@ -2886,5 +3030,114 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
     {
         // Calculate backbone angle correlation.
         return calc_corr_angs(iatoms,cframe,rframe);
+    }
+}
+
+
+real call_ISDM_n(int iatoms, rvec cframe[], rvec rframe[], real rISD[], const char *ISDM)
+{
+    // Default behavior (no -ISDM option) is RMSD.
+    if (strcmp(ISDM, "RMSD") == 0)
+    {
+        // Calculate RMSD.
+        return calc_rmsd_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Scaled RMSD. User gives -srms option.
+    if (strcmp(ISDM, "SRMS") == 0)
+    {
+        // Calculate scaled RMSD.
+        return calc_srms_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Angles. User gives -ang option.
+    if (strcmp(ISDM, "ANG") == 0)
+    {
+        // Calculate dot product of differences in angles.
+        return calc_ang_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Angles. User gives -ang option.
+    if (strcmp(ISDM, "ANG2") == 0)
+    {
+        // Calculate differences of backbone angles.
+        return calc_ang2_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Dihedrals. User gives -dih option.
+    if (strcmp(ISDM, "DIH") == 0)
+    {
+        // Calculate dot product of difference in dihedrals.
+        return calc_dih_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Dihedrals. User gives -dih option.
+    if (strcmp(ISDM, "DIH2") == 0)
+    {
+        // Calculate differences of dihedrals.
+        return calc_dih2_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Angles and dihedrals. User gives -angdih option.
+    if (strcmp(ISDM, "ANGDIH") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_angdih_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Combination of ang and dih. User gives -angdih2 option.
+    if (strcmp(ISDM, "ANGDIH2") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_angdih2_n(iatoms, cframe, rframe, rISD, 2.0);
+    }
+    
+    // Combination of ang and dih. User gives -angdih2 option.
+    if (strcmp(ISDM, "ANGDIH2G") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_angdih2g_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Combination of ang and dih. User gives -angdih2m option.
+    if (strcmp(ISDM, "ANGDIH2M") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_angdih2_n(iatoms, cframe, rframe, rISD, 10.0);
+    }
+    
+    // Phi psi angles. User gives -phipsi option.
+    if (strcmp(ISDM, "PHIPSI") == 0)
+    {
+        // Calculate dot product of difference in dihedrals.
+        return calc_phipsi_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Phi psi angles. User gives -phipsi option.
+    if (strcmp(ISDM, "PHIPSI2") == 0)
+    {
+        // Calculate dot product of difference in dihedrals.
+        return calc_phipsi2_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Atom to atom distances. User gives -drms option.
+    if (strcmp(ISDM, "DRMS") == 0)
+    {
+        // Calculate differences in all atom to atom distances.
+        return calc_drms_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Atom to atom distances. User gives -sdrms option.
+    if (strcmp(ISDM, "SDRMS") == 0)
+    {
+        /* Calculate differences in all atom to atom distances.
+         * 
+         * Scaled by Rgi + Rgj.
+         * 
+         * A few cycles could be saved by storing Rgi, but most
+         * necessary info to calculate Rgi needs to be calculated
+         * for every comparison anyway.
+         */
+        return calc_sdrms_n(iatoms, cframe, rframe, rISD);
     }
 }
