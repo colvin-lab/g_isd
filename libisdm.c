@@ -2839,6 +2839,18 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         ISD  = 2.0 * sqrt(ISD * ISD) / (rg + rgr);
     }
     
+    //  Mean Rg of the two input frames. Used internally.
+    if (strcmp(ISDM, "MRG") == 0)
+    {
+        real rg, rgr, ISD;
+        // Rg of jth frame.
+        rg  = calc_rg(iatoms, cframe);
+        // Rg of ith frame.
+        rgr = calc_rg(iatoms, rframe);
+        // Find mean.
+        ISD = rg + rgr / 2.0;
+    }
+    
     // Difference of end-to-end distance. User gives -e2e option.
     if (strcmp(ISDM, "E2E") == 0)
     {

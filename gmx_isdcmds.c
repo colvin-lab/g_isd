@@ -294,7 +294,7 @@ int gmx_isdcmds(int argc,char *argv[])
     int        *maxframe, *rnum, maxcoori;
     int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes;
     int        percentcalcs, noptions;
-    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bPy;
+    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bRg, bDRg, bPy;
     char       buf[256];
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -308,6 +308,8 @@ int gmx_isdcmds(int argc,char *argv[])
         { efNDX, NULL,   NULL,       ffOPTRD },
         { efXVG, "-eig", "eigvals",  ffOPTWR },
         { efXVG, "-rcc", "corrcoef", ffOPTWR },
+        { efXVG, "-rg",  "rgcorr",   ffOPTWR },
+        { efXVG, "-drg", "drgcorr",  ffOPTWR },
         { efDAT, "-vec", "eigvecs",  ffOPTWR },
         { efDAT, "-isd", "isdcsv",   ffOPTWR },
         { efDAT, "-mds", "mdscsv",   ffOPTWR },
@@ -663,6 +665,8 @@ int gmx_isdcmds(int argc,char *argv[])
     // Output which files?
     bEig = opt2bSet("-eig", NFILE, fnm);
     bRcc = opt2bSet("-rcc", NFILE, fnm);
+    bRg  = opt2bSet("-rg",  NFILE, fnm);
+    bDRg = opt2bSet("-drg", NFILE, fnm);
     bVec = opt2bSet("-vec", NFILE, fnm);
     bISD = opt2bSet("-isd", NFILE, fnm);
     bMDS = opt2bSet("-mds", NFILE, fnm);
@@ -693,10 +697,10 @@ int gmx_isdcmds(int argc,char *argv[])
     // Create arrays based on nframes.
     snew(avgdiff, nframes);
     snew(ISDmat,  nframes);
-    for (i=0; i<nframes; i++)
+    for (i = 0; i < nframes; i++)
     {
         avgdiff[i] = 0;
-        snew(ISDmat[i],nframes);
+        snew(ISDmat[i], nframes);
     }
     
     /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
@@ -916,7 +920,7 @@ int gmx_isdcmds(int argc,char *argv[])
     fprintf(stderr, "\n\n");
     
     // Find the final average of differences.
-    for (i=0; i<nframes; i++)
+    for (i = 0; i < nframes; i++)
     {
         avgISD += avgdiff[i];
     }
@@ -1216,7 +1220,7 @@ int gmx_isdcmds(int argc,char *argv[])
     }
     
     // Allocates memory to store the approximated ISD.
-    if (bRcc || bPy)
+    if (bRcc || bRg || bDRg || bPy)
     {
         snew(EISD,  nframes);
         snew(EISDm, nframes * nframes);
@@ -1328,7 +1332,7 @@ int gmx_isdcmds(int argc,char *argv[])
             gmx_fatal(FARGS,"\nThe argument for -rcutoff must be greater "
                             "than or equal to 0.\n");
         }
-        fprintf(stderr, "\nCalculating accuracy of dimensionality reduction. "
+        fprintf(stderr, "\nCalculating accuracy of dimensionality reduction."
                         "\n");
         
         // Opens the output file.
@@ -1359,6 +1363,110 @@ int gmx_isdcmds(int argc,char *argv[])
         printf("\nThe rcutoff is: %12.8f \n", rcutoff);
         printf("The final correlation coefficient is: %12.8f \n", Rcc);
         printf("The estimated dimensionality is: %-6i \n", d);
+    }
+    
+    // Tests correlation between ISD and Rg.
+    if (bRg)
+    {
+        fprintf(stderr, "\nCalculating correlation of ISD with Rg.\n");
+        
+        // Opens the output file.
+        out = xvgropen(opt2fn("-rg", NFILE, fnm), 
+                       "Correlation of Rg with ISD", 
+                       "Radius of Gyration, Rg (nm)", 
+                       "ISD", 
+                       oenv);
+        
+        /* Main calculation loop.
+         */
+        printf("\nCalculating Rg matrix. \n");
+        
+        percentcalcs = 1;
+        
+        // Loop through reference frames.
+        for (i = 0; i < nframes; i++)
+        {
+            // Loop through fitting frames.
+            for (j = 0; j < nframes; j++)
+            {
+                // Skip for i == j (comparing structure with self).
+                if (i == j)
+                {
+                    EISD[i][j] = 0;
+                    continue;
+                }
+                
+                EISD[i][j] = call_ISDM(iatoms, frames[j], frames[i], "MRG");
+                
+                // Write to file.
+                fprintf(out, "%12.8f %12.8f \n", EISD[i][j], ISDmat[i][j]);
+            }
+            
+            // Update progress output.
+            while ((double)(i+1)/nframes >= (double)percentcalcs/100)
+            {
+                fprintf(stderr, "Approximately %i percent complete. \r", percentcalcs);
+                fflush(stderr);
+                percentcalcs++;
+            }
+        }
+        
+        Rcc = calc_rcc(ISDmat, EISD, nframes);
+        printf("The Rg vs ISD correlation coefficient is: %12.8f \n", Rcc);
+        // Close file.
+        ffclose(out);
+    }
+    
+    // Tests correlation between ISD and Rg difference.
+    if (bDRg)
+    {
+        fprintf(stderr, "\nCalculating correlation of ISD with Rg difference.\n");
+        
+        // Opens the output file.
+        out = xvgropen(opt2fn("-drg", NFILE, fnm), 
+                       "Correlation of Rg difference with ISD", 
+                       "Radius of Gyration Difference (nm)", 
+                       "ISD", 
+                       oenv);
+        
+        /* Main calculation loop.
+         */
+        printf("\nCalculating Rg difference matrix. \n");
+        
+        percentcalcs = 1;
+        
+        // Loop through reference frames.
+        for (i = 0; i < nframes; i++)
+        {
+            // Loop through fitting frames.
+            for (j = 0; j < nframes; j++)
+            {
+                // Skip for i == j (comparing structure with self).
+                if (i == j)
+                {
+                    EISD[i][j] = 0;
+                    continue;
+                }
+                
+                EISD[i][j] = call_ISDM(iatoms, frames[j], frames[i], "RG");
+                
+                // Write to file.
+                fprintf(out, "%12.8f %12.8f \n", EISD[i][j], ISDmat[i][j]);
+            }
+            
+            // Update progress output.
+            while ((double)(i+1)/nframes >= (double)percentcalcs/100)
+            {
+                fprintf(stderr, "Approximately %i percent complete. \r", percentcalcs);
+                fflush(stderr);
+                percentcalcs++;
+            }
+        }
+        
+        Rcc = calc_rcc(ISDmat, EISD, nframes);
+        printf("The Rg difference vs ISD correlation coefficient is: %12.8f \n", Rcc);
+        // Close file.
+        ffclose(out);
     }
     
     
