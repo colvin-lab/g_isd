@@ -58,7 +58,7 @@ real calc_rmsd(int iatoms, rvec frame[], rvec rframe[])
         // Calculations to find msd.
         for(d = 0; d < 3; d++)
         {
-            xd = (double)(frame[i][d] - rframe[i][d]);
+            xd     = (double)(frame[i][d] - rframe[i][d]);
             msdt += xd * xd;
         }
     }
@@ -74,6 +74,58 @@ real calc_rmsd_n(int iatoms, rvec frame[], rvec rframe[], real rmsd[])
      * The accuracy is slightly improved by using doubles instead of reals.
      */
     int i, d;
+    double xd, rmsdi, rmsdt;
+    
+    rmsdt = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find msd.
+        rmsdi = 0.0;
+        for(d = 0; d < 3; d++)
+        {
+            xd     = (double)(frame[i][d] - rframe[i][d]);
+            rmsdi += xd * xd;
+        }
+        rmsdi   = sqrt(rmsdi);
+        rmsd[i] = (real)rmsdi;
+        rmsdt  += rmsdi;
+    }
+    // Normalize for number of atoms.
+    return (real)(rmsdt / iatoms);
+}
+
+
+
+real calc_msd(int iatoms, rvec frame[], rvec rframe[])
+{
+    /* This is a simplified version of something in the gromacs lib.
+     * The accuracy is slightly improved by using doubles instead of reals.
+     */
+    int i, d;
+    double xd, msdt;
+    
+    msdt = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find msd.
+        for(d = 0; d < 3; d++)
+        {
+            xd    = (double)(frame[i][d] - rframe[i][d]);
+            msdt += xd * xd;
+        }
+    }
+    // Normalize for number of atoms.
+    return (real)(msdt / iatoms);
+}
+
+
+
+real calc_msd_n(int iatoms, rvec frame[], rvec rframe[], real msd[])
+{
+    /* This is a simplified version of something in the gromacs lib.
+     * The accuracy is slightly improved by using doubles instead of reals.
+     */
+    int i, d;
     double xd, msdi, msdt;
     
     msdt = 0.0;
@@ -83,10 +135,10 @@ real calc_rmsd_n(int iatoms, rvec frame[], rvec rframe[], real rmsd[])
         msdi = 0.0;
         for(d = 0; d < 3; d++)
         {
-            xd = (double)(frame[i][d] - rframe[i][d]);
+            xd    = (double)(frame[i][d] - rframe[i][d]);
             msdi += xd * xd;
         }
-        rmsd[i] = (real)msdi;
+        msd[i] = (real)msdi;
         msdt  += msdi;
     }
     // Normalize for number of atoms.
@@ -144,11 +196,11 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
      * the rmsd value.
      */
     int i, j, d;
-    double xd, xdm, msdi, msdt, mmsdt;
+    double xd, xdm, msdi, mmsdt, msrms;
     
     // Initialize to zero.
-    msdt  = 0;
-    mmsdt = 0;
+    msrms = 0.0;
+    mmsdt = 0.0;
     
     // Main loop.
     for(i = 0; i < iatoms; i++)
@@ -169,11 +221,9 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
             msdi  += xd  * xd;
         }
         srms[i] = (real)msdi;
-        msdt   += msdi;
     }
     
     // Normalize for number of atoms.
-    msdt  /= iatoms;
     mmsdt /= iatoms;
     // Scale by the mirrored reference msd and take the root.
     for (i = 0; i < iatoms; i++)
@@ -185,8 +235,11 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
         {
             srms[i] = 1.0;
         }
+        
+        // To calculate the mean srms.
+        msrms += srms[i];
     }
-    return (real)sqrt(msdt / mmsdt);
+    return (real)(msrms / iatoms);
 }
 
 
@@ -259,14 +312,14 @@ real calc_drms_n(int iatoms, rvec frame[], rvec rframe[], real drms[])
             drmsi   += diff_leg * diff_leg;
         }
         // Normalize the sum by the number of differences.
-        drmsi    /= iatoms - 1;
+        drmsi    /= sqrt(drmsi / (iatoms - 1));
         // Update the main sum.
-        drms[i]   = (real)sqrt(drmsi);
+        drms[i]   = (real)drmsi;
         sum_dist += drmsi;
     }
     
-    // Normalize by the number of summed differences and take the root.
-    return (real)sqrt(sum_dist / iatoms);
+    // Normalize by the number of summed distances.
+    return (real)(sum_dist / iatoms);
 }
 
 
@@ -360,9 +413,9 @@ real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real sdrms[])
             // Update the sum by squaring the difference.
             drmsi += diff_leg * diff_leg;
         }
-        // Normalize the sum by the number of differences.
-        drmsi    /= (iatoms-1);
-        sdrms[i]   = (real)sqrt(drmsi);
+        // Normalize the sum by the number of differences and take the root.
+        drmsi     = sqrt(drmsi / (iatoms - 1));
+        sdrms[i]  = (real)drmsi;
         // Update the main sum.
         sum_dist += drmsi;
     }
@@ -371,11 +424,9 @@ real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real sdrms[])
     Rgi = sqrt(Rgi / (2 * iatoms * iatoms));
     Rgr = sqrt(Rgr / (2 * iatoms * iatoms));
     Rg2 = Rgi + Rgr; // Twice the mean Rg.
-    // First, normalize by the number of summed differences.
+    // Normalize by the number of summed differences.
     sum_dist /= iatoms;
-    // Second, take the root.
-    sum_dist  = sqrt(sum_dist);
-    // Third, sqrt and scale by the molecule size. Twice the geometric mean Rg.
+    // Scale by the molecule size. Twice the geometric mean Rg.
     sum_dist /= Rg2;
     // Repeat per atom.
     for (i = 0; i < iatoms; i++)
@@ -395,7 +446,7 @@ real calc_sdrms_n(int iatoms, rvec frame[], rvec rframe[], real sdrms[])
     }
     else
     {
-        return sum_dist;
+        return (real)sum_dist;
     }
 }
 
@@ -633,8 +684,7 @@ real calc_ang2_n(int iatoms, rvec frame[], rvec rframe[], real ang[])
         // Update sum.
         sum_angs += irang;
     }
-    
-    // Divide by n - 2 angles and take the root.
+    // Divide by n - 2 backbone angles.
     sum_angs /= iatoms - 2;
     // Finished.
     return (real)sum_angs;
@@ -804,16 +854,18 @@ real calc_dih_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
         // Update sum.
         sumcosxy   += cosxy;
     }
-    
-    // Divide by the number of angles summed.
-    sumcosxy /= (iatoms - 3);
     // Array dih stores the means of two dihedral angles.
     // *** First and last indeces = 0.0.
     // *** Second and second last indeces only include one dihedral angle.
+    sumcosxy += (double)dih[1];
+    sumcosxy += (double)dih[iatoms - 2];
     for (i = 2; i < (iatoms - 2); i++)
     {
-        dih[i] /= 2.0;
+        dih[i]   /= 2.0;
+        sumcosxy += (double)dih[i];
     }
+    // Divide by the number of summed indeces.
+    sumcosxy /= (iatoms - 2);
     // Finished.
     return (real)sumcosxy;
 }
@@ -1001,23 +1053,19 @@ real calc_dih2_n(int iatoms, rvec frame[], rvec rframe[], real dih[])
         // Array dih stores the means of two dihedral angles.
         dih[i - 1] += (real)dihi;
         dih[i - 2] += (real)dihi;
-        // Update sum.
-        sum_dihs += dihi2;
     }
-    
-    // Divide by n - 3 and take sqrt.
-    sum_dihs  = sqrt(sum_dihs / (iatoms - 3));
-    // Rescale from [0, pi] to [0, 1].
-    sum_dihs /= pi20;
     // Array dih stores the means of two dihedral angles.
     // *** First and last indeces = 0.0.
     // *** Second and second last indeces only include one dihedral angle.
+    sum_dihs += dih[1];
+    sum_dihs += dih[iatoms - 2];
     for (i = 2; i < (iatoms - 2); i++)
     {
         dih[i] /= 2.0;
+        sum_dihs += (double)dih[i];
     }
-    // Finished.
-    return (real)sum_dihs;
+    // Divide by the number of summed indeces.
+    return (real)(sum_dihs / (iatoms - 2));
 }
 
 
@@ -1413,12 +1461,12 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
     // Initializing variables.
     int i;
     double pi20 = 3.14159265358979323846;
-    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
+    double irang, irang2, dihi, dihi2, sum_angdih;
     double sum_denom;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
-    sum_angs = 0.0; sum_dihs = 0.0;
+    sum_angdih = 0.0;
     for (i = 0; i < iatoms; i++)
     {
         angdih[i] = 0.0;
@@ -1489,8 +1537,6 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
         // Update output array.
         angdih[i - 2] += (real)dihi2;
         angdih[i - 1] += (real)dihi2;
-        // Update sum.
-        sum_dihs += dihi2;
     }
     
     // The dih portion of angdih stores the means of two dihedral angles.
@@ -1520,28 +1566,22 @@ real calc_angdih2_n(int iatoms, rvec frame[], rvec rframe[], real angdih[], doub
         // Apply multiplier. Update output array.
         irang2    *= ang_multi;
         angdih[i] += (real)irang2;
-        // Update sum.
-        sum_angs  += irang2;
     }
     
     // Finalize output array.
     for (i = 1; i < (iatoms - 1); i++)
     {
         // Take the mean of ang and dih. Adjust for ang_multi.
-        angdih[i] /= ang_multi + 1.0;
+        angdih[i]  /= ang_multi + 1.0;
         // Take sqrt.
-        angdih[i]  = sqrt(angdih[i]);
+        angdih[i]   = sqrt(angdih[i]);
         // Rescale from [0, pi] to [0, 1].
-        angdih[i] /= pi20;
+        angdih[i]  /= pi20;
+        // To calculate the mean of the indeces.
+        sum_angdih += (double)angdih[i];
     }
-    // Calculate denominator based on the number of angles summed.
-    sum_denom   = (ang_multi + 1.0) * iatoms - (2.0 * ang_multi - 3.0); 
-    // Divide by angles summed and take sqrt.
-    sum_angdih  = sqrt((sum_angs + sum_dihs) / sum_denom);
-    // Rescale from [0, pi] to [0, 1].
-    sum_angdih /= pi20;
-    // Output.
-    return (real)sum_angdih;
+    // Divide by the number of summed indeces.
+    return (real)(sum_angdih / (iatoms / 2));
 }
 
 
@@ -1677,12 +1717,11 @@ real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
     // Initializing variables.
     int i;
     double pi20 = 3.14159265358979323846;
-    double irang, irang2, dihi, dihi2, sum_angs, sum_dihs, sum_angdih;
-    double sum_denom;
+    double irang, irang2, dihi, dihi2, sum_angdih;
     rvec vec1, vec2, vec3, pvec1, pvec2;
     real iang, rang;
     
-    sum_angs = 0.0; sum_dihs = 0.0;
+    sum_angdih = 0.0;
     for (i = 0; i < iatoms; i++)
     {
         angdih[i] = 0.0;
@@ -1753,15 +1792,13 @@ real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
         // Update output array.
         angdih[i - 2] += (real)dihi2;
         angdih[i - 1] += (real)dihi2;
-        // Update sum.
-        sum_dihs += dihi2;
     }
     
     // The dih portion of angdih stores the means of two dihedral angles.
     // *** First and last indeces = 0.0.
     // *** Second and second last indeces only include one dihedral angle.
-    angdih[1] = sqrt(angdih[1]);
-    angdih[(iatoms - 2)] = sqrt(angdih[(iatoms - 2)]);
+    angdih[1]          = sqrt(angdih[1]);
+    angdih[iatoms - 2] = sqrt(angdih[iatoms - 2]);
     for (i = 2; i < (iatoms - 2); i++)
     {
         angdih[i] = sqrt(angdih[i] / 2.0);
@@ -1784,28 +1821,19 @@ real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
         irang      = iang - rang;
         irang2     = irang * irang;
         angdih[i] *= (real)sqrt(irang2);
-        // Update sum.
-        sum_angs  += irang2;
     }
     
     // Finalize output array.
     for (i = 1; i < (iatoms - 1); i++)
     {
         // Geometric mean of ang and dih.
-        angdih[i]  = sqrt(angdih[i]);
         // Rescale from [0, pi] to [0, 1].
-        angdih[i] /= pi20;
+        angdih[i]   = sqrt(angdih[i]) / pi20;
+        // To calculate the mean of the indeces.
+        sum_angdih += (double)angdih[i];
     }
-    
-    // Divide by angles summed.
-    sum_angs   /= iatoms - 2;
-    sum_dihs   /= iatoms - 3;
-    // Geometric mean.
-    sum_angdih  = sqrt(sqrt(sum_angs) * sqrt(sum_dihs));
-    // Rescale from [0, pi] to [0, 1].
-    sum_angdih /= pi20;
-    // Output.
-    return (real)sum_angdih;
+    // Divide by the number of summed indeces.
+    return (real)(sum_angdih / (iatoms - 2));
 }
 
 
@@ -2034,9 +2062,7 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
             rang *= -1.0;
         }
         // Solve for the dot product and normalize.
-        cosxy = (real)(cos(((double)iang) - ((double)rang)) - 1.0)/(-2.0);
-        // Update phipsi sum.
-        sum_phipsi += cosxy;
+        cosxy = (real)(cos(((double)iang) - ((double)rang)) - 1.0) / (-2.0);
         // Add sum to phipsi.
         if (cosxy < 0.0)
         {
@@ -2106,8 +2132,6 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         }
         // Solve for the dot product and normalize range: 0 to 1.
         cosxy = (real)(cos(((double)iang) - ((double)rang)) - 1.0)/(-2.0);
-        // Final sum.
-        sum_phipsi += cosxy;
         // Update phipsi.
         if (i == 0) // First residue has no phi angle.
         {
@@ -2132,10 +2156,11 @@ real calc_phipsi_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
             }
         }
     }
-    
-    // Divide by the number of angles summed.
-    sum_phipsi /= 2 * ((iatoms / 3) - 1);
-    return (real)sum_phipsi;
+    for (i = 0; i < iatoms; i++)
+    {
+        sum_phipsi += (double)phipsi[i];
+    }
+    return (real)(sum_phipsi / iatoms);
 }
 
 
@@ -2393,10 +2418,8 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         {
             irang += 2 * pi20;
         }
-        irang2 = irang * irang;
-        // Update phipsi sum.
-        sum_phipsi += irang2;
-        phipsi[i]   = irang2;
+        irang2    = irang * irang;
+        phipsi[i] = irang2;
     }
     
     // Psi angles.
@@ -2465,94 +2488,20 @@ real calc_phipsi2_n(int iatoms, rvec frame[], rvec rframe[], real phipsi[])
         {
             irang += 2 * pi20;
         }
-        irang2 = irang * irang;
-        // Update phipsi sum.
-        sum_phipsi += irang2;
+        irang2      = irang * irang;
         phipsi[i]  += irang2;
     }
-    
-    // Divide by the number of angles summed and sqrt.
-    sum_phipsi  = sqrt(sum_phipsi / (2 * ((iatoms / 3) - 1)));
     for (i = 1; i < ((iatoms / 3) - 1); i++)
     {
         phipsi[i] /= 2.0;
     }
     for (i = 0; i < (iatoms / 3); i++)
     {
-        phipsi[i]  = sqrt(phipsi[i]);
+        phipsi[i]   = sqrt(phipsi[i]) / pi20;
+        sum_phipsi += phipsi[i];
     }
-    // Rescale from [0, pi] to [0, 1].
-    sum_phipsi /= pi20;
-    return (real)sum_phipsi;
-}
-
-
-
-real calc_msd(int iatoms, rvec x[], rvec xref[])
-{
-    /* This is a simplified version of something in the gromacs lib.
-     * 
-     * While I was at it, I changed the return from rmsd to msd.
-     * 
-     * Inputs:
-     * Compare the coordinates in x to the reference coordinates in xref.
-     * Both should contain iatoms of coordinates in rvec format.
-     */
-    int i, d;
-    real xd, msdi;
-    double msdt;
-    
-    msdt = 0.0;
-    for(i = 0; i < iatoms; i++)
-    {
-        // Calculations to find msd.
-        msdi = 0.0;
-        for(d = 0; d < 3; d++)
-        {
-            xd = x[i][d] - xref[i][d];
-            msdi += xd * xd;
-        }
-        msdt += msdi;
-    }
-    // Normalize for number of atoms.
-    return (real)(msdt / iatoms);
-}
-
-
-
-real calc_msd_n(int iatoms, rvec x[], rvec xref[], real msd[])
-{
-    /* This is a simplified version of something in the gromacs lib.
-     * 
-     * While I was at it, I changed the return from rmsd to msd.
-     * 
-     * Inputs:
-     * Compare the coordinates in x to the reference coordinates in xref.
-     * Both should contain iatoms of coordinates in rvec format.
-     * 
-     * Outputs:
-     * Array msd stores the msd per atom.
-     */
-    int i, d;
-    real xd, msdt, msdi;
-    
-    msdt = 0;
-    for(i = 0; i < iatoms; i++)
-    {
-        // Calculations to find msd.
-        msdi = 0;
-        for(d = 0; d < 3; d++)
-        {
-            xd = x[i][d] - xref[i][d];
-            msdi += xd * xd;
-        }
-        msd[i] = msdi;
-        msdt += msdi;
-    }
-    // Normalize for number of atoms.
-    msdt /= iatoms;
-    
-    return msdt;
+    // Divide by number of summed indeces.
+    return (real)(sum_phipsi / (iatoms / 3));
 }
 
 
@@ -2765,6 +2714,7 @@ real calc_corr_angs(int iatoms,rvec frame[],rvec rframe[])
 
 real calc_rg(int iatoms, rvec frame[])
 {
+    // Assumes frame[] to be centered.
     int i, d;
     double rg = 0;
     for (i = 0; i < iatoms; i++)

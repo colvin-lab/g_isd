@@ -64,6 +64,7 @@ int gmx_isdorder(int argc,char *argv[])
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bSE2E=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE;
     static gmx_bool user_linear=FALSE, user_fisherstultz=FALSE;
+    static gmx_bool user_unscaled=FALSE, bUnscaled=FALSE;
     static gmx_bool bLinear=FALSE, bFisherStultz=FALSE, bOrder=FALSE;
     static real     user_sf = -1.0, user_zero = -1.0, user_one = -1.0;
     t_pargs pa[] = {
@@ -128,6 +129,10 @@ int gmx_isdorder(int argc,char *argv[])
             "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
             "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
             "e1001075.\n\nAssumes only CA atoms." },
+        { "-unscaled", FALSE, etBOOL, {&user_unscaled},
+            "Overrides the default order parameter equation to output the "
+            "unscaled, raw result. The output is the mean of the per residue "
+            "ISD which may differ slightly from the mean overall ISD." }, 
         { "-linear", FALSE, etBOOL, {&user_linear},
             "Overrides the default order parameter equation to use linear "
             "rescaling. The rescaling limits can be set manually with the "
@@ -160,14 +165,14 @@ int gmx_isdorder(int argc,char *argv[])
             "rescaling option. Sets the value which is rescaled to one. "
             "Ignored unless the -linear option is the default for the chosen "
             "ISDM or the -linear flag is given manually." },
-        { "-order", FALSE, etBOOL, {&bOrder},
-            "By default, the order parameter for the entire molecule is "
-            "calculated if the -resid option is not specified. By default, "
-            "the order parameter for the entire molecule is NOT calculated "
-            "if the -resid option is specified. Using the -order option "
-            "without the -resid option does not change behavior. Using the "
-            "-order option with the -resid option causes both to be "
-            "calculated with a corresponding increase of analysis time." },
+//         { "-order", FALSE, etBOOL, {&bOrder},
+//             "By default, the order parameter for the entire molecule is "
+//             "calculated if the -resid option is not specified. By default, "
+//             "the order parameter for the entire molecule is NOT calculated "
+//             "if the -resid option is specified. Using the -order option "
+//             "without the -resid option does not change behavior. Using the "
+//             "-order option with the -resid option causes both to be "
+//             "calculated with a corresponding increase of analysis time." },
     };
     
     
@@ -234,7 +239,7 @@ int gmx_isdorder(int argc,char *argv[])
     
     if (bResid)
     {
-        if (bPCOR || bACOR || bESA)
+        if (bPCOR || bACOR || bMAMMOTH || bESA)
         {
             gmx_fatal(FARGS, "The -resid option does not work with this ISDM.");
         }
@@ -524,28 +529,43 @@ int gmx_isdorder(int argc,char *argv[])
         bLinear = TRUE;
     }
     
-    // Throw an error if multiple -ISDM options were given by the user.
+    // Error if multiple -ISDM options were given by the user.
     if (noptions > 1)
     {
-        gmx_fatal(FARGS,"\nThis tool only supports using one optional ISDM at a time.\n");
+        gmx_fatal(FARGS, "\nThis tool only supports using one optional ISDM "
+                         "at a time.\n");
     }
     
-    // Throw an error if both -linear and -fisherstultz were given by user.
-    if (user_linear && user_fisherstultz)
-    {
-        gmx_fatal(FARGS,"\nOnly one of -linear or -fisherstultz should be used.\n");
-    }
     
     // Check if scaling equation is specified manually.
+    noptions = 0;
+    if (user_unscaled)
+    {
+        bUnscaled     = TRUE;
+        bLinear       = FALSE;
+        bFisherStultz = FALSE;
+        noptions++;
+    }
     if (user_linear)
     {
+        bUnscaled     = FALSE;
         bLinear       = TRUE;
         bFisherStultz = FALSE;
+        noptions++;
     }
     if (user_fisherstultz)
     {
+        bUnscaled     = FALSE;
         bLinear       = FALSE;
         bFisherStultz = TRUE;
+        noptions++;
+    }
+    
+    // Error if two of -unscaled, -linear, or -fisherstultz given by user.
+    if (noptions > 1)
+    {
+        gmx_fatal(FARGS, "\nOnly one of unscaled, -linear, or -fisherstultz "
+                         "should be used.\n");
     }
     
     // Check if scaling factor was specified manually.
@@ -759,10 +779,10 @@ int gmx_isdorder(int argc,char *argv[])
                 if (bResid)
                 {
                     ISD = call_ISDM_n(iatoms, cframe, rframe, rISD, ISDM);
-                    if (bOrder)
-                    {
-                        ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
-                    }
+//                     if (bOrder)
+//                     {
+//                         ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
+//                     }
                 }
                 else
                 {
@@ -796,14 +816,11 @@ int gmx_isdorder(int argc,char *argv[])
             }
             
             // Update sums.
-            if (bLinear)
+            if (bLinear || bUnscaled)
             {
                 if (bResid)
                 {
-                    if (bOrder)
-                    {
-                        ISDsum += dISD;
-                    }
+                    ISDsum += dISD;
                     for (k = 0; k < nres; k++)
                     {
                         rISDsum[k] += drISD[k];
@@ -818,10 +835,10 @@ int gmx_isdorder(int argc,char *argv[])
             {
                 if (bResid)
                 {
-                    if (bOrder)
-                    {
-                        ISDsum += exp(-dISD / order_sf);
-                    }
+//                     if (bOrder)
+//                     {
+//                         ISDsum += exp(-dISD / order_sf);
+//                     }
                     for (k = 0; k < nres; k++)
                     {
                         rISDsum[k] += exp(-drISD[k] / order_sf);
@@ -834,24 +851,24 @@ int gmx_isdorder(int argc,char *argv[])
             }
         }
         
-        if (bLinear)
+        if (bLinear || bUnscaled)
         {
             if (bResid)
             {
-                if (bOrder)
-                {
-                    ISDsum /= (nframes - 1);
-                    ISDorder     += ISDsum;
-                }
+                ISDorder += ISDsum / (nframes - 1);
+//                 if (bOrder)
+//                 {
+//                     ISDsum /= (nframes - 1);
+//                     ISDorder     += ISDsum;
+//                 }
                 for (k = 0; k < nres; k++)
                 {
-                    rISDsum[k]   /= (nframes - 1);
-                    rISDorder[k] += rISDsum[k];
+                    rISDorder[k] += rISDsum[k] / (nframes - 1);
                 }
             }
             else
             {
-                ISDsum /= (nframes - 1);
+                ISDorder += ISDsum / (nframes - 1);
             }
         }
         
@@ -859,15 +876,15 @@ int gmx_isdorder(int argc,char *argv[])
         {
             if (bResid)
             {
-                if (bOrder)
-                {
-                    ISDsum   /= (nframes - 1);
-                    ISDorder += log(1 + ISDsum) / log(2);
-                }
+                ISDorder += log(1 + (ISDsum / (nframes - 1))) / log(2);
+//                 if (bOrder)
+//                 {
+//                     ISDsum   /= (nframes - 1);
+//                     ISDorder += log(1 + ISDsum) / log(2);
+//                 }
                 for (k = 0; k < nres; k++)
                 {
-                    rISDsum[k]   /= (nframes - 1);
-                    rISDorder[k] += log(1 + rISDsum[k]) / log(2);
+                    rISDorder[k] += log(1 + (rISDsum[k] / (nframes - 1))) / log(2);
                 }
             }
             else
@@ -888,23 +905,46 @@ int gmx_isdorder(int argc,char *argv[])
     }
     
     // Final rescaling steps.
+    if (bUnscaled)
+    {
+        ISDorder /= nframes;
+        if (bResid)
+        {
+            for (k = 0; k < nres; k++)
+            {
+                rISDorder[k] /= nframes;
+            }
+        }
+    }
+    
     if (bLinear)
     {
         if (bResid)
         {
-            if (bOrder)
+            ISDorder /= nframes;
+            if (ISDorder < order_zero)
             {
-                ISDorder /= nframes;
-                if (ISDorder < order_zero)
-                {
-                    ISDorder = order_zero;
-                }
-                if (ISDorder > order_one)
-                {
-                    ISDorder = order_one;
-                }
-                ISDorder  = (ISDorder - order_zero) / (order_one - order_zero);
+                ISDorder = order_zero;
             }
+            if (ISDorder > order_one)
+            {
+                ISDorder = order_one;
+            }
+            ISDorder  = (ISDorder - order_zero) / (order_one - order_zero);
+                
+//             if (bOrder)
+//             {
+//                 ISDorder /= nframes;
+//                 if (ISDorder < order_zero)
+//                 {
+//                     ISDorder = order_zero;
+//                 }
+//                 if (ISDorder > order_one)
+//                 {
+//                     ISDorder = order_one;
+//                 }
+//                 ISDorder  = (ISDorder - order_zero) / (order_one - order_zero);
+//             }
             for (k = 0; k < nres; k++)
             {
                 rISDorder[k] /= nframes;
@@ -926,24 +966,24 @@ int gmx_isdorder(int argc,char *argv[])
         }
     }
     
-    
+///////////////////////////////// Broken /////////////////////////////////////    
     if (bFisherStultz)
     {
         if (bResid)
         {
-            if (bOrder)
-            {
-                ISDorder /= nframes;
-                if (ISDorder < order_zero)
-                {
-                    ISDorder = order_zero;
-                }
-                if (ISDorder > order_one)
-                {
-                    ISDorder = order_one;
-                }
-                ISDorder = (ISDorder - order_zero) / (order_one - order_zero);
-            }
+//             if (bOrder)
+//             {
+//                 ISDorder /= nframes;
+//                 if (ISDorder < order_zero)
+//                 {
+//                     ISDorder = order_zero;
+//                 }
+//                 if (ISDorder > order_one)
+//                 {
+//                     ISDorder = order_one;
+//                 }
+//                 ISDorder = (ISDorder - order_zero) / (order_one - order_zero);
+//             }
             for (k = 0; k < nres; k++)
             {
                 rISDorder[k] /= nframes;
@@ -964,6 +1004,7 @@ int gmx_isdorder(int argc,char *argv[])
             ISDorder  = (ISDorder - order_zero) / (order_one - order_zero);
         }
     }
+///////////////////////////////////// Broken /////////////////////////////////
     
     // Print output to specified files.
     if (bResid)
@@ -983,13 +1024,17 @@ int gmx_isdorder(int argc,char *argv[])
     
     
     // Output the final information.
+    if (bUnscaled)
+    {
+        printf("\n\nUnscaled ISD calculated instead of disorder parameter.\n");
+    }
     if (bLinear)
     {
-        printf("\n\nOrder parameter calculated using linear rescaling.\n");
+        printf("\n\nDisorder parameter calculated using linear rescaling.\n");
     }
     if (bFisherStultz)
     {
-        printf("\n\nOrder parameter calculated using Fisher-Stultz equation.\n");
+        printf("\n\nDisorder parameter calculated using Fisher-Stultz equation.\n");
     }
     printf("Order Parameter: %10f \n", ISDorder);
     
