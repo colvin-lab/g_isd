@@ -2837,6 +2837,7 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         ISD = rg - rgr;
         // Find scaled absolute value.
         ISD  = 2.0 * sqrt(ISD * ISD) / (rg + rgr);
+        return ISD;
     }
     
     //  Mean Rg of the two input frames. Used internally.
@@ -2849,6 +2850,7 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         rgr = calc_rg(iatoms, rframe);
         // Find mean.
         ISD = rg + rgr / 2.0;
+        return ISD;
     }
     
     // Difference of end-to-end distance. User gives -e2e option.

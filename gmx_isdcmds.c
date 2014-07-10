@@ -123,7 +123,7 @@ real calc_rcc(real** ISD, real** EISD, int nframes)
 {
     int i, j;
     int N = nframes * (nframes - 1) / 2;
-    real sCov, sISD, sEISD, sISD2, sEISD2, mISD, mEISD, vISD, vEISD;
+    double sCov, sISD, sEISD, sISD2, sEISD2, mISD, mEISD, vISD, vEISD;
     sCov = 0.0; sISD = 0.0; sEISD = 0.0; sISD2 = 0.0; sEISD2 = 0.0;
     
     // Variances, means, and the means of squares.
@@ -294,7 +294,7 @@ int gmx_isdcmds(int argc,char *argv[])
     int        *maxframe, *rnum, maxcoori;
     int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes;
     int        percentcalcs, noptions;
-    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bRg, bDRg, bPy;
+    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy;
     char       buf[256];
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -308,7 +308,7 @@ int gmx_isdcmds(int argc,char *argv[])
         { efNDX, NULL,   NULL,       ffOPTRD },
         { efXVG, "-eig", "eigvals",  ffOPTWR },
         { efXVG, "-rcc", "corrcoef", ffOPTWR },
-        { efXVG, "-rg",  "rgcorr",   ffOPTWR },
+        { efXVG, "-mrg", "mrgcorr",  ffOPTWR },
         { efXVG, "-drg", "drgcorr",  ffOPTWR },
         { efDAT, "-vec", "eigvecs",  ffOPTWR },
         { efDAT, "-isd", "isdcsv",   ffOPTWR },
@@ -665,7 +665,7 @@ int gmx_isdcmds(int argc,char *argv[])
     // Output which files?
     bEig = opt2bSet("-eig", NFILE, fnm);
     bRcc = opt2bSet("-rcc", NFILE, fnm);
-    bRg  = opt2bSet("-rg",  NFILE, fnm);
+    bMRg = opt2bSet("-mrg", NFILE, fnm);
     bDRg = opt2bSet("-drg", NFILE, fnm);
     bVec = opt2bSet("-vec", NFILE, fnm);
     bISD = opt2bSet("-isd", NFILE, fnm);
@@ -1220,7 +1220,7 @@ int gmx_isdcmds(int argc,char *argv[])
     }
     
     // Allocates memory to store the approximated ISD.
-    if (bRcc || bRg || bDRg || bPy)
+    if (bRcc || bMRg || bDRg || bPy)
     {
         snew(EISD,  nframes);
         snew(EISDm, nframes * nframes);
@@ -1366,12 +1366,12 @@ int gmx_isdcmds(int argc,char *argv[])
     }
     
     // Tests correlation between ISD and Rg.
-    if (bRg)
+    if (bMRg)
     {
         fprintf(stderr, "\nCalculating correlation of ISD with Rg.\n");
         
         // Opens the output file.
-        out = xvgropen(opt2fn("-rg", NFILE, fnm), 
+        out = xvgropen(opt2fn("-mrg", NFILE, fnm), 
                        "Correlation of Rg with ISD", 
                        "Radius of Gyration, Rg (nm)", 
                        "ISD", 
@@ -1392,7 +1392,7 @@ int gmx_isdcmds(int argc,char *argv[])
                 // Skip for i == j (comparing structure with self).
                 if (i == j)
                 {
-                    EISD[i][j] = 0;
+                    EISD[i][j] = 0.0;
                     continue;
                 }
                 
