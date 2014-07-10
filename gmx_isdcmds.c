@@ -294,7 +294,7 @@ int gmx_isdcmds(int argc,char *argv[])
     int        *maxframe, *rnum, maxcoori;
     int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes;
     int        percentcalcs, noptions;
-    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy;
+    gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy, bM;
     char       buf[256];
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -314,6 +314,7 @@ int gmx_isdcmds(int argc,char *argv[])
         { efDAT, "-isd", "isdcsv",   ffOPTWR },
         { efDAT, "-mds", "mdscsv",   ffOPTWR },
         { efDAT, "-py",  "mayapy",   ffOPTWR },
+        { efDAT, "-m",   "disp6D",   ffOPTWR },
     }; 
 #define NFILE asize(fnm)
     int npargs;
@@ -671,7 +672,7 @@ int gmx_isdcmds(int argc,char *argv[])
     bISD = opt2bSet("-isd", NFILE, fnm);
     bMDS = opt2bSet("-mds", NFILE, fnm);
     bPy  = opt2bSet("-py",  NFILE, fnm);
-    
+    bM   = opt2bSet("-m",   NFILE, fnm);
     
     nframes = 0;
     do
@@ -1220,7 +1221,7 @@ int gmx_isdcmds(int argc,char *argv[])
     }
     
     // Allocates memory to store the approximated ISD.
-    if (bRcc || bMRg || bDRg || bPy)
+    if (bRcc || bMRg || bDRg || bPy || bM)
     {
         snew(EISD,  nframes);
         snew(EISDm, nframes * nframes);
@@ -1319,6 +1320,103 @@ int gmx_isdcmds(int argc,char *argv[])
         fprintf(out, "    if b < 0.0:\n        b = 0.0\n");
         fprintf(out, "    mlab.points3d(x, y, z, s, color=(r, g, b), scale_factor=1)\n\n");
         
+        // Close the output file.
+        ffclose(out);
+    }
+    
+    // Reduced dimensional visualization.
+    if (bM)
+    {
+        // Calculate accuracy of the displayed results.
+        calc_EISD(MDS, nframes, 6, EISD);
+        Rcc = calc_rcc(ISDmat, EISD, nframes);
+        fprintf(stdout, "The accuracy for 6D MDS is R = %8.4f.\n\n", Rcc);
+        
+        // Opens the output file.
+        out = opt2FILE("-m", NFILE, fnm, "w");
+        
+        // Octave function and comments.
+        fprintf(out, "function disp6D(bR, R, bTitle, Title, bSlep, STime, ");
+        fprintf(out, "bRes, Res, bLine)\n");
+        fprintf(out, "%% Plots MDS output in 6 dimensions:\n");
+        fprintf(out, "%% x, y, z, r, g, b\n\n");
+        
+        // Defaults.
+        fprintf(out, "if (nargin < 9)\n    bLine  = false;\nend\n");
+        fprintf(out, "if (nargin < 7)\n    bRes   = false;\nend\n");
+        fprintf(out, "if (nargin < 5)\n    bSlep  = false;\nend\n");
+        fprintf(out, "if (nargin < 3)\n    bTitle = false;\nend\n");
+        fprintf(out, "if (nargin < 1)\n    bR     = false;\nend\n");
+        
+        // Save data to matrix.
+        fprintf(out, "%% Save data to matrix.\n");
+        fprintf(out, "MDS = [%8.4f", MDS[0][0]);
+        for (j = 1; j < 6; j++)
+        {
+            fprintf(out, ", %8.4f", MDS[0][j]);
+        }
+        for (i = 1; i < nframes; i++)
+        {
+            fprintf(out, ";\n       %8.4f", MDS[i][0]);
+            for (j = 1; j < 6; j++)
+            {
+                fprintf(out, ", %8.4f", MDS[i][j]);
+            }
+        }
+        fprintf(out, "];\n\n");
+        
+        // Set bead radius. Calculate box center and range.
+        fprintf(out, "%% Calculate plot limits.\n");
+        fprintf(out, "bsize = max(max(MDS)) - min(min(MDS));\n");
+        fprintf(out, "if (~bR)\n    R = 0.01 * bsize;\nend\n");
+        fprintf(out, "bctr  = mean(MDS);\n");
+        fprintf(out, "bmin  = min(min(MDS)) - R;\n");
+        fprintf(out, "bmax  = max(max(MDS)) + R;\n\n");
+        
+        // Split MDS by dimensions. Recenter and rescale rgb dimensions.
+        fprintf(out, "%% Split MDS by dimensions. Recenter to 0.5.\n");
+        fprintf(out, "x = MDS(:,1);\n");
+        fprintf(out, "y = MDS(:,2);\n");
+        fprintf(out, "z = MDS(:,3);\n");
+        fprintf(out, "r = MDS(:,4);\n");
+        fprintf(out, "g = MDS(:,5);\n");
+        fprintf(out, "b = MDS(:,6);\n\n");
+        fprintf(out, "%% Rescale colors.\n");
+        fprintf(out, "color_sf = 0.8 / bsize;\n");
+        fprintf(out, "r = (r - bctr(4)) * color_sf + 0.5;\n");
+        fprintf(out, "g = (g - bctr(5)) * color_sf + 0.5;\n");
+        fprintf(out, "b = (b - bctr(6)) * color_sf + 0.5;\n\n");
+        
+        // Setup main figure.
+        fprintf(out, "%% Setup figure.\n");
+        fprintf(out, "n = %6i;\n", nframes);
+        fprintf(out, "if (~bRes)\n    Res = 6;\nend\n");
+        fprintf(out, "[Sx, Sy, Sz] = sphere(Res);\n");
+        fprintf(out, "Sx = R * Sx; Sy = R * Sy; Sz = R * Sz;\n");
+        fprintf(out, "figure;\n");
+        fprintf(out, "if (bTitle)\n    title(Title);\nend\n");
+        fprintf(out, "axis([bmin, bmax, bmin, bmax, bmin, bmax]);\n\n");
+        fprintf(out, "%% Uncomment the following line in Matlab.\n");
+        fprintf(out, "%%axis('vis3d');\n\n");
+        
+        // Display coordinates.
+        fprintf(out, "%% Display 6D coordinates.\n");
+        fprintf(out, "hold on;\n");
+        fprintf(out, "for i = 1:n\n    ");
+        fprintf(out, "c = [r(i), g(i), b(i)];\n    ");
+        fprintf(out, "h = surf(Sx + x(i), Sy + y(i), Sz + z(i));\n    ");
+        fprintf(out, "set(h, 'FaceColor', c, 'EdgeColor', 'none');\n    ");
+        fprintf(out, "if (bSlep)\n        pause(STime);\n    end\n");
+        fprintf(out, "end\n\n");
+        
+        // Line option.
+        fprintf(out, "%% Optionally draw line to show time component.\n");
+        fprintf(out, "if (bLine)\n    c = [0.75, 0.75, 0.75];\n    ");
+        fprintf(out, "plot3(x, y, z, 'LineWidth', 1, 'Color', c);\n");
+        fprintf(out, "end\nhold off;\n\n");
+        
+        // Close .m script.
+        fprintf(out, "end");
         // Close the output file.
         ffclose(out);
     }
