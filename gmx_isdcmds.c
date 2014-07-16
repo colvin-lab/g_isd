@@ -163,8 +163,8 @@ int gmx_isdcmds(int argc,char *argv[])
         "[TT]g_isdcmds[tt] implements classical multi-dimensional scaling ",
         "by first calculating the matrix of inter-structure distances (ISD). ",
         "The default ISDM if one is not, chosen by the user is RMSD. Only ",
-	"one ISDM can be chosen at a time. The -xpm option is required. An ",
-	"upper threshold for the ISD can be specified with the setmax option."
+        "one ISDM can be chosen at a time. The -xpm option is required. An ",
+        "upper threshold for the ISD can be specified with the setmax option."
     };
     
     
@@ -382,6 +382,27 @@ int gmx_isdcmds(int argc,char *argv[])
         noptions++;
     }
     
+    if (bANGDIH)
+    {
+        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
+        ISDM = "ANGDIH";
+        noptions++;
+    }
+    
+    if (bANGDIH2)
+    {
+        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
+        ISDM = "ANGDIH2";
+        noptions++;
+    }
+    
+    if (bANGDIH2G)
+    {
+        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
+        ISDM = "ANGDIH2G";
+        noptions++;
+    }
+    
     if (bPHIPSI)
     {
         fprintf(stderr,"\nUsing phi and psi angles as ISDM.\n");
@@ -463,27 +484,6 @@ int gmx_isdcmds(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing backbone angle correlation as ISDM.\n");
         ISDM = "ACOR";
-        noptions++;
-    }
-    
-    if (bANGDIH)
-    {
-        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
-        ISDM = "ANGDIH";
-        noptions++;
-    }
-    
-    if (bANGDIH2)
-    {
-        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
-        ISDM = "ANGDIH2";
-        noptions++;
-    }
-    
-    if (bANGDIH2G)
-    {
-        fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
-        ISDM = "ANGDIH2G";
         noptions++;
     }
     
@@ -918,7 +918,7 @@ int gmx_isdcmds(int argc,char *argv[])
             percentcalcs++;
         }
     }
-    fprintf(stderr, "\n\n");
+    fprintf(stderr, "\n\n\n");
     
     // Find the final average of differences.
     for (i = 0; i < nframes; i++)
@@ -1337,16 +1337,19 @@ int gmx_isdcmds(int argc,char *argv[])
         
         // Octave function and comments.
         fprintf(out, "function disp6D(bR, R, bTitle, Title, bSlep, STime, ");
-        fprintf(out, "bRes, Res, bLine)\n");
-        fprintf(out, "%% Plots MDS output in 6 dimensions:\n");
+        fprintf(out, "bRes, Res, bShowTime, dTime, bLine)\n");
+        fprintf(out, "%% function disp6D(bR, R, bTitle, Title, bSlep, \n");
+        fprintf(out, "%% STime, bRes, Res, bShowTime, dTime, bLine)\n");
+        fprintf(out, "%%\n%% Plots MDS output in 6 dimensions:\n");
         fprintf(out, "%% x, y, z, r, g, b\n\n");
         
         // Defaults.
-        fprintf(out, "if (nargin < 9)\n    bLine  = false;\nend\n");
-        fprintf(out, "if (nargin < 7)\n    bRes   = false;\nend\n");
-        fprintf(out, "if (nargin < 5)\n    bSlep  = false;\nend\n");
-        fprintf(out, "if (nargin < 3)\n    bTitle = false;\nend\n");
-        fprintf(out, "if (nargin < 1)\n    bR     = false;\nend\n");
+        fprintf(out, "if (nargin < 11)\n    bLine     = false;\nend\n");
+        fprintf(out, "if (nargin < 9) \n    bShowTime = false;\nend\n");
+        fprintf(out, "if (nargin < 7) \n    bRes      = false;\nend\n");
+        fprintf(out, "if (nargin < 5) \n    bSlep     = false;\nend\n");
+        fprintf(out, "if (nargin < 3) \n    bTitle    = false;\nend\n");
+        fprintf(out, "if (nargin < 1) \n    bR        = false;\nend\n");
         
         // Save data to matrix.
         fprintf(out, "%% Save data to matrix.\n");
@@ -1394,8 +1397,9 @@ int gmx_isdcmds(int argc,char *argv[])
         fprintf(out, "[Sx, Sy, Sz] = sphere(Res);\n");
         fprintf(out, "Sx = R * Sx; Sy = R * Sy; Sz = R * Sz;\n");
         fprintf(out, "figure;\n");
-        fprintf(out, "if (bTitle)\n    title(Title);\nend\n");
         fprintf(out, "axis([bmin, bmax, bmin, bmax, bmin, bmax]);\n\n");
+        fprintf(out, "%% The following line can be commented in Matlab.\n");
+        fprintf(out, "axis('equal');\n");
         fprintf(out, "%% Uncomment the following line in Matlab.\n");
         fprintf(out, "%%axis('vis3d');\n\n");
         
@@ -1406,8 +1410,13 @@ int gmx_isdcmds(int argc,char *argv[])
         fprintf(out, "c = [r(i), g(i), b(i)];\n    ");
         fprintf(out, "h = surf(Sx + x(i), Sy + y(i), Sz + z(i));\n    ");
         fprintf(out, "set(h, 'FaceColor', c, 'EdgeColor', 'none');\n    ");
-        fprintf(out, "if (bSlep)\n        pause(STime);\n    end\n");
-        fprintf(out, "end\n\n");
+        fprintf(out, "if (bSlep)\n        pause(STime);\n        ");
+        fprintf(out, "if (bShowTime)\n            ");
+        fprintf(out, "iTime  = num2str(i * dTime);\n            ");
+        fprintf(out, "iTitle = strcat(iTime,' ns');\n            ");
+        fprintf(out, "title(iTitle);\n        end\n    end\nend\n");
+        // Figure title.
+        fprintf(out, "if (bTitle)\n    title(Title);\nend\n\n");
         
         // Line option.
         fprintf(out, "%% Optionally draw line to show time component.\n");
@@ -1503,7 +1512,8 @@ int gmx_isdcmds(int argc,char *argv[])
             // Update progress output.
             while ((double)(i+1)/nframes >= (double)percentcalcs/100)
             {
-                fprintf(stderr, "Approximately %i percent complete. \r", percentcalcs);
+                fprintf(stderr, "Approximately %i percent complete. \r", 
+                        percentcalcs);
                 fflush(stderr);
                 percentcalcs++;
             }
@@ -1518,7 +1528,8 @@ int gmx_isdcmds(int argc,char *argv[])
     // Tests correlation between ISD and Rg difference.
     if (bDRg)
     {
-        fprintf(stderr, "\nCalculating correlation of ISD with Rg difference.\n");
+        fprintf(stderr, "\nCalculating correlation of ISD with Rg difference."
+                        "\n");
         
         // Opens the output file.
         out = xvgropen(opt2fn("-drg", NFILE, fnm), 
@@ -1555,14 +1566,16 @@ int gmx_isdcmds(int argc,char *argv[])
             // Update progress output.
             while ((double)(i+1)/nframes >= (double)percentcalcs/100)
             {
-                fprintf(stderr, "Approximately %i percent complete. \r", percentcalcs);
+                fprintf(stderr, "Approximately %i percent complete. \r", 
+                        percentcalcs);
                 fflush(stderr);
                 percentcalcs++;
             }
         }
         
         Rcc = calc_rcc(ISDmat, EISD, nframes);
-        printf("The Rg difference vs ISD correlation coefficient is: %12.8f \n", Rcc);
+        printf("The Rg difference vs ISD correlation coefficient is: "
+               "%12.8f \n", Rcc);
         // Close file.
         ffclose(out);
     }

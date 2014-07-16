@@ -926,6 +926,7 @@ int gmx_isdmap(int argc,char *argv[])
             percentcalcs++;
         }
     }
+    fprintf(stderr, "\n\n\n");
     
     // Find the final average of differences.
     for (i=0; i<nframes; i++)
