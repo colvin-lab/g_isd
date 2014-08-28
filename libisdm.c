@@ -96,6 +96,72 @@ real calc_rmsd_n(int iatoms, rvec frame[], rvec rframe[], real rmsd[])
 
 
 
+real calc_srms(int iatoms, rvec frame[], rvec rframe[])
+{
+    /* Size-independent modification of RMSD. Scaled to a value [0,1].
+     * 
+     * Maiorov and Crippen, 1995.
+     * SRMS = D(A,B) / [2*R(A)^2 + 2*R(B)^2 - D(A,B)^2]^(1/2)
+     * 
+     * The original equation (16) replaces 2*R(B)^2 with R(B)^2 which appears
+     * to be a typo.
+     */
+    int i, d;
+    double xd, rc, rr, msdt, denom;
+    
+    msdt = 0.0; rc = 0.0; rr = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find MSD and Rg.
+        for(d = 0; d < 3; d++)
+        {
+            // MSD portion.
+            xd    = (double)(frame[i][d] - rframe[i][d]);
+            msdt += xd * xd;
+            // Rg portion.
+            rc   += (double)( frame[i][d] *  frame[i][d]);
+            rr   += (double)(rframe[i][d] * rframe[i][d]);
+        }
+    }
+    // Normalize for the number of atoms.
+    msdt /= iatoms;
+    rc   /= iatoms;
+    rr   /= iatoms;
+    // Equation 16 appeared to have a typo.
+    return (real)sqrt(msdt) / sqrt((2 * rc) + (2 * rr) - (2 * msdt));
+}
+
+
+
+real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
+{
+    /* Size-independent modification of RMSD. Scaled to a value [0,1].
+     * 
+     * 
+     */
+    int i, d;
+    double xd, rmsdi, rmsdt;
+    
+    rmsdt = 0.0;
+    for(i = 0; i < iatoms; i++)
+    {
+        // Calculations to find msd.
+        rmsdi = 0.0;
+        for(d = 0; d < 3; d++)
+        {
+            xd     = (double)(frame[i][d] - rframe[i][d]);
+            rmsdi += xd * xd;
+        }
+        rmsdi   = sqrt(rmsdi);
+        rmsd[i] = (real)rmsdi;
+        rmsdt  += rmsdi;
+    }
+    // Normalize for number of atoms.
+    return (real)(rmsdt / iatoms);
+}
+
+
+
 real calc_msd(int iatoms, rvec frame[], rvec rframe[])
 {
     /* This is a simplified version of something in the gromacs lib.
@@ -147,7 +213,7 @@ real calc_msd_n(int iatoms, rvec frame[], rvec rframe[], real msd[])
 
 
 
-real calc_srms(int iatoms, rvec frame[], rvec rframe[])
+real calc_mrms(int iatoms, rvec frame[], rvec rframe[])
 {
     /*
      * The mmsdt is the average msd between the reference and its
@@ -188,7 +254,7 @@ real calc_srms(int iatoms, rvec frame[], rvec rframe[])
 
 
 
-real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
+real calc_mrms_n(int iatoms, rvec frame[], rvec rframe[], real mrms[])
 {
     /*
      * The mmsdt is the average msd between the reference and its
@@ -196,10 +262,10 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
      * the rmsd value.
      */
     int i, j, d;
-    double xd, xdm, msdi, mmsdt, msrms;
+    double xd, xdm, msdi, mmsdt, mrms, mmrms;
     
     // Initialize to zero.
-    msrms = 0.0;
+    mmrms = 0.0;
     mmsdt = 0.0;
     
     // Main loop.
@@ -220,7 +286,7 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
             xd     = (double)(frame[i][d] - rframe[i][d]);
             msdi  += xd  * xd;
         }
-        srms[i] = (real)msdi;
+        mrms[i] = (real)msdi;
     }
     
     // Normalize for number of atoms.
@@ -228,18 +294,18 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
     // Scale by the mirrored reference msd and take the root.
     for (i = 0; i < iatoms; i++)
     {
-        srms[i] = (real)sqrt(((double)srms[i]) / mmsdt);
+        mrms[i] = (real)sqrt(((double)mrms[i]) / mmsdt);
         // The total msd is always less than mmsd, but individual atoms may 
         // be greater.
-        if (srms[i] > 1.0)
+        if (mrms[i] > 1.0)
         {
-            srms[i] = 1.0;
+            mrms[i] = 1.0;
         }
         
         // To calculate the mean srms.
-        msrms += srms[i];
+        mmrms += mrms[i];
     }
-    return (real)(msrms / iatoms);
+    return (real)(mmrms / iatoms);
 }
 
 

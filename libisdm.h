@@ -1,4 +1,4 @@
-/* 
+s/* 
  * 
  * Tim Connolly - tconnolly@ucmerced.edu
  * Copyright (c) 2014, Regents of the University of California
@@ -44,6 +44,10 @@ extern real calc_rmsd_n(int iatoms, rvec frame[], rvec rframe[], real rmsd[]);
 extern real calc_srms(int iatoms, rvec frame[], rvec rframe[]);
 
 extern real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[]);
+
+extern real calc_mrms(int iatoms, rvec frame[], rvec rframe[]);
+
+extern real calc_mrms_n(int iatoms, rvec frame[], rvec rframe[], real mrms[]);
 
 extern real calc_drms(int iatoms, rvec frame[], rvec rframe[]);
 
