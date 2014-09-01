@@ -153,7 +153,7 @@ real calc_srms_n(int iatoms, rvec frame[], rvec rframe[], real srms[])
             rmsdi += xd * xd;
         }
         rmsdi   = sqrt(rmsdi);
-        rmsd[i] = (real)rmsdi;
+        srms[i] = (real)rmsdi;
         rmsdt  += rmsdi;
     }
     // Normalize for number of atoms.
@@ -262,7 +262,7 @@ real calc_mrms_n(int iatoms, rvec frame[], rvec rframe[], real mrms[])
      * the rmsd value.
      */
     int i, j, d;
-    double xd, xdm, msdi, mmsdt, mrms, mmrms;
+    double xd, xdm, msdi, mmsdt, mmrms;
     
     // Initialize to zero.
     mmrms = 0.0;

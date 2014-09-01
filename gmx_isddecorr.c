@@ -150,7 +150,7 @@ int gmx_isddecorr(int argc,char *argv[])
     t_trxstatus *status;
     t_topology top;
     int        ePBC;
-    rvec       *x, *iframe, *jframe, rrot_xyz, xold;
+    rvec       *x, *iframe, *jframe, *cframe, *rframe, rrot_xyz, xold;
     rvec       **frames;
     real       *nweights, *iweights;
     real       ISD, sumISD, avgISD, maxISD, decorri, sumdn;
@@ -629,10 +629,11 @@ int gmx_isddecorr(int argc,char *argv[])
                 {
                     // Make a copy of the fit frame.
                     copy_rvecn(frames[i], iframe, 0, iatoms);
+                    rframe = iframe;
                 }
                 else
                 {
-                    iframe = frames[i];
+                    rframe = frames[i];
                 }
                 
                 // Fit the jth frame.
@@ -642,10 +643,11 @@ int gmx_isddecorr(int argc,char *argv[])
                     copy_rvecn(frames[j], jframe, 0, iatoms);
                     // Aligns jframe to current reference frame.
                     do_fit(iatoms, iweights, frames[i], jframe);
+                    cframe = jframe;
                 }
                 else
                 {
-                    jframe = frames[j];
+                    cframe = frames[j];
                 }
                 
                 // Calls most ISDM options.
@@ -711,33 +713,33 @@ int gmx_isddecorr(int argc,char *argv[])
                     {
                         for (m = 0; m < 3; m++)
                         {
-                            xold[m] = iframe[k][m];
+                            xold[m] = rframe[k][m];
                         }
                         for (m = 0; m < 3; m++)
                         {
-                            iframe[k][m] = 0;
+                            rframe[k][m] = 0;
                             for (n = 0; n < 3; n++)
                             {
-                                iframe[k][m] += rrot[m][n] * xold[n];
+                                rframe[k][m] += rrot[m][n] * xold[n];
                             }
                         }
                     }
                     // Calculate RMSD after rotation.
-                    ISD = sqrt(calc_msd(iatoms, jframe, iframe));
+                    ISD = sqrt(calc_msd(iatoms, cframe, rframe));
                 }
                 
                 // MAMMOTH. User gives -mammoth option.
                 if (bMAMMOTH)
                 {
                     // Calculate MAMMOTH comparison.
-                    ISD = calc_mammoth(iatoms, jframe, iframe, rnum);
+                    ISD = calc_mammoth(iatoms, cframe, rframe, rnum);
                 }
                 
                 // ESA.
                 if (bESA)
                 {
                     // Calculate ESA comparison.
-                    ISD = calc_esa(iatoms, jframe, iframe);
+                    ISD = calc_esa(iatoms, cframe, rframe);
                 }
                 
                 // Store the difference.
@@ -841,10 +843,11 @@ int gmx_isddecorr(int argc,char *argv[])
                 {
                     // Make a copy of the fit frame.
                     copy_rvecn(frames[i], iframe, 0, iatoms);
+                    rframe = iframe;
                 }
                 else
                 {
-                    iframe = frames[i];
+                    rframe = frames[i];
                 }
                 
                 // Fit the jth frame.
@@ -854,10 +857,11 @@ int gmx_isddecorr(int argc,char *argv[])
                     copy_rvecn(frames[j], jframe, 0, iatoms);
                     // Aligns jframe to current reference frame.
                     do_fit(iatoms, iweights, frames[i], jframe);
+                    cframe = jframe;
                 }
                 else
                 {
-                    jframe = frames[j];
+                    cframe = frames[j];
                 }
                 
                 // Calls most ISDM options.
@@ -923,33 +927,33 @@ int gmx_isddecorr(int argc,char *argv[])
                     {
                         for (m = 0; m < 3; m++)
                         {
-                            xold[m] = iframe[k][m];
+                            xold[m] = rframe[k][m];
                         }
                         for (m = 0; m < 3; m++)
                         {
-                            iframe[k][m] = 0;
+                            rframe[k][m] = 0;
                             for (n = 0; n < 3; n++)
                             {
-                                iframe[k][m] += rrot[m][n] * xold[n];
+                                rframe[k][m] += rrot[m][n] * xold[n];
                             }
                         }
                     }
                     // Calculate RMSD after rotation.
-                    ISD = sqrt(calc_msd(iatoms, jframe, iframe));
+                    ISD = sqrt(calc_msd(iatoms, cframe, rframe));
                 }
                 
                 // MAMMOTH. User gives -mammoth option.
                 if (bMAMMOTH)
                 {
                     // Calculate MAMMOTH comparison.
-                    ISD = calc_mammoth(iatoms, jframe, iframe, rnum);
+                    ISD = calc_mammoth(iatoms, cframe, rframe, rnum);
                 }
                 
                 // ESA.
                 if (bESA)
                 {
                     // Calculate ESA comparison.
-                    ISD = calc_esa(iatoms, jframe, iframe);
+                    ISD = calc_esa(iatoms, cframe, rframe);
                 }
                 
                 // Put the differences into the algorithm.
@@ -999,7 +1003,7 @@ int gmx_isddecorr(int argc,char *argv[])
             decorr[i] = decorr[i] / (nframes - i);
         }
         
-        // Special case for rrot.
+        // Special case for rrot at dt = 0.
         if (bRROT)
         {
             for (i = 0; i < nframes; i++)
@@ -1007,7 +1011,8 @@ int gmx_isddecorr(int argc,char *argv[])
                 j = i;
                 // Make a copy of the fit frame.
                 copy_rvecn(frames[i], iframe, 0, iatoms);
-                jframe = frames[j];
+                rframe = iframe;
+                cframe = frames[j];
                 // Solve for three random numbers.
                 for (k = 0; k < 3; k++)
                 {
@@ -1059,19 +1064,19 @@ int gmx_isddecorr(int argc,char *argv[])
                 {
                     for (m = 0; m < 3; m++)
                     {
-                        xold[m] = iframe[k][m];
+                        xold[m] = rframe[k][m];
                     }
                     for (m = 0; m < 3; m++)
                     {
-                        iframe[k][m] = 0;
+                        rframe[k][m] = 0;
                         for (n = 0; n < 3; n++)
                         {
-                            iframe[k][m] += rrot[m][n] * xold[n];
+                            rframe[k][m] += rrot[m][n] * xold[n];
                         }
                     }
                 }
                 // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, jframe, iframe));
+                ISD = sqrt(calc_msd(iatoms, cframe, rframe));
                 decorr[0] += ISD;
                 if (ISD < mindecorr[0])
                 {
@@ -1268,10 +1273,11 @@ int gmx_isddecorr(int argc,char *argv[])
             {
                 // Make a copy of the fit frame.
                 copy_rvecn(frames[i], iframe, 0, iatoms);
+                rframe = iframe;
             }
             else
             {
-                iframe = frames[i];
+                rframe = frames[i];
             }
                 
             // Fit the jth frame.
@@ -1281,10 +1287,11 @@ int gmx_isddecorr(int argc,char *argv[])
                 copy_rvecn(frames[j], jframe, 0, iatoms);
                 // Aligns jframe to current reference frame.
                 do_fit(iatoms, iweights, frames[i], jframe);
+                cframe = jframe;
             }
             else
             {
-                jframe = frames[j];
+                cframe = frames[j];
             }
             
             // Calls most ISDM options.
@@ -1350,33 +1357,33 @@ int gmx_isddecorr(int argc,char *argv[])
                 {
                     for (m = 0; m < 3; m++)
                     {
-                        xold[m] = iframe[k][m];
+                        xold[m] = rframe[k][m];
                     }
                     for (m = 0; m < 3; m++)
                     {
-                        iframe[k][m] = 0;
+                        rframe[k][m] = 0;
                         for (n = 0; n < 3; n++)
                         {
-                            iframe[k][m] += rrot[m][n] * xold[n];
+                            rframe[k][m] += rrot[m][n] * xold[n];
                         }
                     }
                 }
                 // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, jframe, iframe));
+                ISD = sqrt(calc_msd(iatoms, cframe, rframe));
             }
             
             // MAMMOTH. User gives -mammoth option.
             if (bMAMMOTH)
             {
                 // Calculate MAMMOTH comparison.
-                ISD = calc_mammoth(iatoms, jframe, iframe, rnum);
+                ISD = calc_mammoth(iatoms, cframe, rframe, rnum);
             }
             
             // ESA.
             if (bESA)
             {
                 // Calculate ESA comparison.
-                ISD = calc_esa(iatoms, jframe, iframe);
+                ISD = calc_esa(iatoms, cframe, rframe);
             }
             
             // Store the difference.
