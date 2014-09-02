@@ -107,7 +107,7 @@ real calc_srms(int iatoms, rvec frame[], rvec rframe[])
      * to be a typo.
      */
     int i, d;
-    double xd, rc, rr, msdt, denom;
+    double xd, rc, rr, msdt;
     
     msdt = 0.0; rc = 0.0; rr = 0.0;
     for(i = 0; i < iatoms; i++)
@@ -128,7 +128,7 @@ real calc_srms(int iatoms, rvec frame[], rvec rframe[])
     rc   /= iatoms;
     rr   /= iatoms;
     // Equation 16 appeared to have a typo.
-    return (real)sqrt(msdt) / sqrt((2 * rc) + (2 * rr) - (2 * msdt));
+    return (real)sqrt(msdt) / sqrt((2 * rc) + (2 * rr) - msdt);
 }
 
 
