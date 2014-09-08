@@ -72,6 +72,7 @@ int gmx_isdcalc(int argc,char *argv[])
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bANGDIH2G=FALSE;
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bSE2E=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE, bGMRG=FALSE;
+    static gmx_bool bMRMS=FALSE;
     static int      bFrame = -1, eFrame = -1;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
@@ -118,6 +119,11 @@ int gmx_isdcalc(int argc,char *argv[])
         { "-rrot", FALSE, etBOOL, {&bRROT},
             "ISDM: RMSD with random rotation of reference structure. " },
         { "-srms", FALSE, etBOOL, {&bSRMS},
+            "ISDM: Scaled RMSD. RMSD between the structure and reference "
+            "divided by the RMSD between the structure and mirror of the "
+            "reference created by multiplying the coordinates by the "
+            "negative identity matrix." },
+        { "-mrms", FALSE, etBOOL, {&bMRMS},
             "ISDM: Scaled RMSD. RMSD between the structure and reference "
             "divided by the RMSD between the structure and mirror of the "
             "reference created by multiplying the coordinates by the "
@@ -243,9 +249,9 @@ int gmx_isdcalc(int argc,char *argv[])
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
               bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
-              bPHIPSI2 || bANGDIH2 || bANGDIH2G || bGMRG);
+              bPHIPSI2 || bANGDIH2 || bANGDIH2G || bGMRG || bMRMS);
     
-    bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
+    bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bMRMS || bPCOR);
     
     // For error checking.
     noptions = 0;
@@ -357,8 +363,15 @@ int gmx_isdcalc(int argc,char *argv[])
     
     if (bSRMS)
     {
-        fprintf(stderr,"\nUsing scaled RMSD as ISDM.\n");
+        fprintf(stderr,"\nUsing size-independent RMSD as ISDM.\n");
         ISDM = "SRMS";
+        noptions++;
+    }
+    
+    if (bMRMS)
+    {
+        fprintf(stderr,"\nUsing mirror-scaled RMSD as ISDM.\n");
+        ISDM = "MRMS";
         noptions++;
     }
     
@@ -709,7 +722,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
@@ -932,7 +945,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }

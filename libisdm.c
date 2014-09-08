@@ -2877,6 +2877,13 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         return calc_srms(iatoms, cframe, rframe);
     }
     
+    // Mirror scaled RMSD. User gives -mrms option.
+    if (strcmp(ISDM, "MRMS") == 0)
+    {
+        // Calculate scaled RMSD.
+        return calc_srms(iatoms, cframe, rframe);
+    }
+    
     // Difference of Rg. User gives -rg option.
     if (strcmp(ISDM, "RG") == 0)
     {
@@ -3088,6 +3095,13 @@ real call_ISDM_n(int iatoms, rvec cframe[], rvec rframe[], real rISD[], const ch
     
     // Scaled RMSD. User gives -srms option.
     if (strcmp(ISDM, "SRMS") == 0)
+    {
+        // Calculate scaled RMSD.
+        return calc_srms_n(iatoms, cframe, rframe, rISD);
+    }
+    
+    // Mirror scaled RMSD. User gives -mrms option.
+    if (strcmp(ISDM, "MRMS") == 0)
     {
         // Calculate scaled RMSD.
         return calc_srms_n(iatoms, cframe, rframe, rISD);
