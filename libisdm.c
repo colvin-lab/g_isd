@@ -2919,6 +2919,19 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         return ISD;
     }
     
+    //  Geometric mean Rg of the two input frames.
+    if (strcmp(ISDM, "GMRG") == 0)
+    {
+        real rg, rgr, ISD;
+        // Rg of jth frame.
+        rg  = calc_rg(iatoms, cframe);
+        // Rg of ith frame.
+        rgr = calc_rg(iatoms, rframe);
+        // Geometric mean.
+        ISD = sqrt(rg * rg + rgr * rgr);
+        return ISD;
+    }
+    
     // Difference of end-to-end distance. User gives -e2e option.
     if (strcmp(ISDM, "E2E") == 0)
     {

@@ -159,7 +159,7 @@ int gmx_isddecorr(int argc,char *argv[])
     real       t, t1, t2, dt, dm, dn, rgi, rgj, pi = 3.14159265358979;
     int        *rnum, *nsum, noptions, pcalcs, nsums;
     int        i, j, k, m, n, ij, mn, df, iatoms, natoms, nframes, nf2, nf4;
-    gmx_bool   bDFLT, bFit, bMinDecorr, bMaxDecorr;
+    gmx_bool   bDFLT, bFit, bMinDecorr, bMaxDecorr, bSens;
     gmx_bool   bDecorr, bdDecorr, bScaled, bMScaled, bDouble, bSNR, bTD;
     char       *ISDM, *grpname, title[256], title2[256], *rname;
     atom_id    *index;
@@ -179,7 +179,8 @@ int gmx_isddecorr(int argc,char *argv[])
         { efXVG, "-mscaled",   "mscaled",   ffOPTWR },
         { efXVG, "-snr",       "snr",       ffOPTWR },
         { efXVG, "-tdo",       "td",        ffOPTWR },
-        { efXVG, "-double",    "double",    ffOPTWR }, 
+        { efXVG, "-double",    "double",    ffOPTWR },
+        { efXVG, "-sens",      "sens",      ffOPTWR },
     }; 
     #define NFILE asize(fnm)
     int npargs;
@@ -493,6 +494,7 @@ int gmx_isddecorr(int argc,char *argv[])
     bSNR       = opt2bSet("-snr",       NFILE, fnm);
     bTD        = opt2bSet("-tdo",       NFILE, fnm);
     bDouble    = opt2bSet("-double",    NFILE, fnm);
+    bSens      = opt2bSet("-sens",      NFILE, fnm);
     
     
     /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
@@ -800,7 +802,7 @@ int gmx_isddecorr(int argc,char *argv[])
      * The output for the double option does not occur here, but the data in 
      * the decorr array must be calculated. The same for the ddecorr option.
      */
-    if (bDecorr || bMinDecorr || bMaxDecorr || bScaled || bMScaled || bDouble || bdDecorr)
+    if (bDecorr || bMinDecorr || bMaxDecorr || bScaled || bMScaled || bDouble || bSens || bdDecorr)
     {
         /* Main calculation loop.
          */

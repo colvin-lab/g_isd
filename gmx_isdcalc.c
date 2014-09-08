@@ -71,7 +71,7 @@ int gmx_isdcalc(int argc,char *argv[])
     static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bANGDIH2G=FALSE;
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bSE2E=FALSE;
-    static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE;
+    static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE, bGMRG=FALSE;
     static int      bFrame = -1, eFrame = -1;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
@@ -106,6 +106,8 @@ int gmx_isdcalc(int argc,char *argv[])
             "ISDM: Calculates difference in Rg. Only compares size. " },
         { "-srg", FALSE, etBOOL, {&bSRG},
             "ISDM: Calculates difference in Rg scaled by mean Rg. " },
+        { "-gmrg", FALSE, etBOOL, {&bGMRG},
+            "ISDM: Calculates geometric mean of Rg. " },
         { "-e2e", FALSE, etBOOL, {&bE2E},
             "ISDM: Calculates difference in end-to-end distance. " },
         { "-se2e", FALSE, etBOOL, {&bSE2E},
@@ -241,7 +243,7 @@ int gmx_isdcalc(int argc,char *argv[])
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
               bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
-              bPHIPSI2 || bANGDIH2 || bANGDIH2G);
+              bPHIPSI2 || bANGDIH2 || bANGDIH2G || bGMRG);
     
     bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
     
@@ -322,6 +324,13 @@ int gmx_isdcalc(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing scaled Rg difference as ISDM.\n");
         ISDM = "SRG";
+        noptions++;
+    }
+    
+    if (bGMRG)
+    {
+        fprintf(stderr,"\nCalculating geometric mean of Rg.\n");
+        ISDM = "GMRG";
         noptions++;
     }
     
@@ -700,7 +709,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G)
+                bPHIPSI2 || bANGDIH2G || bGMRG)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
@@ -923,7 +932,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G)
+                bPHIPSI2 || bANGDIH2G || bGMRG)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
