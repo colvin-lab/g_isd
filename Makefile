@@ -4,7 +4,7 @@ GMXINC=/usr/local/gromacs/include
 GMXLIB=/usr/local/gromacs/lib
 OPTIONS=-g -I$(GMXINC) -L$(GMXLIB)
 LIBLINKS=-lgmx -lgmxana -lm
-INSTALL_BINS=g_isdmap g_isdcalc g_isddecorr g_isdcmds g_isdorder
+INSTALL_BINS=g_isdcalc g_isdcmds g_isdorder
 INSTALL_PATH=$(HOME)/bin
 
 ###
@@ -15,16 +15,10 @@ CPP=g++
 F77=gfortran
 
 # Targets
-all : g_isdmap g_isdcalc g_isddecorr g_isdcmds g_isdorder
+all : g_isdcalc g_isdcmds g_isdorder
 
 # Executables
-g_isdmap : g_isdmap.o gmx_isdmap.o libisdm.o libesa.o
-	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
-
 g_isdcalc : g_isdcalc.o gmx_isdcalc.o libisdm.o libesa.o
-	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
-
-g_isddecorr : g_isddecorr.o gmx_isddecorr.o libisdm.o libesa.o
 	$(CC) $(OPTIONS) $^ -o $@ $(LIBLINKS)
 
 g_isdcmds : g_isdcmds.o gmx_isdcmds.o libisdm.o libesa.o
@@ -36,22 +30,10 @@ g_isdorder : g_isdorder.o gmx_isdorder.o libisdm.o libesa.o
 # Libraries
 
 # Objects
-g_isdmap.o : g_isdmap.c
-	$(CC) $(OPTIONS) -c g_isdmap.c -o $@
-
-gmx_isdmap.o : gmx_isdmap.c
-	$(CC) $(OPTIONS) -c $^ -o $@
-
 g_isdcalc.o : g_isdcalc.c
 	$(CC) $(OPTIONS) -c g_isdcalc.c -o $@
 
 gmx_isdcalc.o : gmx_isdcalc.c
-	$(CC) $(OPTIONS) -c $^ -o $@
-
-g_isddecorr.o : g_isddecorr.c
-	$(CC) $(OPTIONS) -c g_isddecorr.c -o $@
-
-gmx_isddecorr.o : gmx_isddecorr.c
 	$(CC) $(OPTIONS) -c $^ -o $@
 
 g_isdcmds.o : g_isdcmds.c
@@ -76,7 +58,7 @@ clean :
 	rm *.o
 
 dist-clean : clean
-	rm g_isdmap g_isdcalc g_isddecorr g_isdcmds g_isdorder
+	rm g_isdcalc g_isdcmds g_isdorder
 
 install :
 	mkdir -p $(INSTALL_PATH)

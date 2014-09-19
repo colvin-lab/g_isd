@@ -34,6 +34,12 @@
 
 
 
+void write_mat_levels(FILE *out,int n_x, int n_y,int *nlevels,real lo,real hi,t_rgb rlo,t_rgb rhi);
+void write_mat_levels3(FILE *out,int n_x,int n_y,int *nlevels,real lo,real mid,real hi,t_rgb rlo,t_rgb rmid,t_rgb rhi);
+void write_mat_pixels(FILE *out,int n_x,int n_y,real **matrix,real lo,real hi,int nlevels);
+void write_mat_pixels3(FILE *out,int n_x,int n_y,real **matrix,real lo,real mid,real hi,int nlevels);
+
+
 
 int gmx_isdcalc(int argc,char *argv[])
 {
@@ -53,7 +59,7 @@ int gmx_isdcalc(int argc,char *argv[])
         "calculations are optional, and the -var option outputs variance ",
         "of ISD for each frame to a file and the overall variance to stdout. ",
         "Optionally, a subset of frames can be used as reference structures ",
-        "(still compared to all other frames) with the bframe and eframe ",
+        "(still compared to all other frames) with the bf and ef ",
         "options. ",
         "The default ISDM if one is not chosen by the user is RMSD, and only ",
         "one ISDM can be chosen at a time. ",
@@ -64,8 +70,6 @@ int gmx_isdcalc(int argc,char *argv[])
         "complete in less time. "
     };
     
-    
-    
     static gmx_bool bANG=FALSE, bDIH=FALSE, bANGDIH=FALSE, bDRMS=FALSE;
     static gmx_bool bPHIPSI=FALSE, bSRMS=FALSE, bPCOR=FALSE, bMAMMOTH=FALSE;
     static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
@@ -73,7 +77,8 @@ int gmx_isdcalc(int argc,char *argv[])
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bSE2E=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE, bGMRG=FALSE;
     static gmx_bool bMRMS=FALSE;
-    static int      bFrame = -1, eFrame = -1;
+    static int      user_bf = -1, user_ef = -1, user_td = -1, user_tdsens = -1;
+    static real     setmax = -1.0;
     t_pargs pa[] = {
         { "-ang", FALSE, etBOOL, {&bANG},
             "ISDM: Mean cosine of difference of backbone angles for each "
@@ -152,57 +157,80 @@ int gmx_isdcalc(int argc,char *argv[])
         { "-esa", FALSE, etBOOL, {&bESA},
             "ISDM: Elastic shape analysis. Based on image analysis. "
             "Warps structure onto the reference structure. Original source "
-            "code ported from Matlab to C. For this measure, please cite: \n\n"
+            "code ported from Matlab to C. Assumes only CA atoms. "
+            "For this measure, please cite: \n\n"
             "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
             "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
-            "e1001075.\n\nAssumes only CA atoms." },
-        { "-bframe", FALSE, etINT, {&bFrame},
-            "Compare range of frames from bframe to eframe to all other " 
-            "frames. The bframe and eframe options are applied after the b, " 
+            "e1001075.\n\n" },
+        { "-bf", FALSE, etINT, {&user_bf},
+            "Compare range of frames from bf to ef to all other " 
+            "frames. The bf and ef options are applied after the b, " 
             "e, and dt options and use units of frames instead of units of " 
             "time. Frame numbers are counted from one." 
         },
-        { "-eframe", FALSE, etINT, {&eFrame},
-            "Compare range of frames from bframe to eframe to all other " 
-            "frames. The bframe and eframe options are applied after the b, " 
+        { "-ef", FALSE, etINT, {&user_ef},
+            "Compare range of frames from bf to ef to all other " 
+            "frames. The bf and ef options are applied after the b, " 
             "e, and dt options and use units of frames instead of units of " 
             "time. Frame numbers are counted from one." 
         },
+        { "-td", FALSE, etINT, {&user_td},
+            "Number of frames used for the time difference of -tdo output. " },
+        { "-tdsens", FALSE, etINT, {&user_tdsens},
+            "Number of frames corresponding to the maximum time difference "
+            "used to calculate sensitivity of -sens output option." },
+        { "-setmax", FALSE, etREAL, {&setmax},
+            "Set maximum value to threshold the xpm file. Must be greater "
+            "than the average inter-structure distance." },
     };
     
     
     
-    FILE       *out;
+    FILE       *out, *out1, *out2;
     t_trxstatus *status;
     t_topology top;
-    int        ePBC;
-    rvec       *x, *iframe, *jframe, *rframe, *cframe, rrot_xyz, xold;
+    t_rgb      rlo, rmd, rhi;
+    rvec       *x, *iframe, *jframe, *rframe, *cframe;
     rvec       **frames, *topframe, *trjframe;
-    real       *nweights, *iweights;
-    real       ISD, *diff;
-    double     dISD, maxISD, avgISD, varISD, msqi;
-    double     *maxdiff, *avgdiff, *vardiff;
-    matrix     box, rrot, rrotx, rroty, rrotz;
-    real       t, pi = 3.14159265358979;
-    int        *maxframe, *rnum;
-    int        i, j, k, m, n, bf, ef, iatoms, natoms, nframes, maxframei;
-    int        pcalcs, noptions;
-    gmx_bool   bDFLT, bMean, bVar, bMax, bPair, bRef, bFit;
-    char       *ISDM, *grpname, title[256], title2[256], *rname;
+    real       *nweights, *iweights, *xticks, *yticks, xpm_max;
+    real       ISD, **ISDMat, minDCR, maxDCR;
+    real       t, t1, t2, dt, dm, dn;
+    double     dISD, maxISD, avgISD, varISD, msqISD, avgSCL, maxSCL, dSNR;
+    double     *maxISDF, *avgISDF, *varISDF, *DCR, *VDCR, *SNR, *sens;
+    matrix     box;
+    int        *maxframe, maxframei, *rnum, *nsum, ref_bf, ref_ef, oobc;
+    int        i, j, k, m, n, ij, mn, bf, ef, iatoms, natoms, nframes, nf2;
+    int        ePBC, pcalcs, noptions;
+    static int nlevels = 81;
+    gmx_bool   bDFLT, bAvg, bVar, bMax, bPair, bRef, bFit, bSens, bSNR, bTD;
+    gmx_bool   bMap, bISD, bISDMat, bDCR, bVDCR, bCalcDCR, bMinDCR, bMaxDCR;
+    gmx_bool   bAvgSCL, bMaxSCL;
     atom_id    *index;
     output_env_t oenv;
     gmx_rmpbc_t  gpbc=NULL;
+    char       *ISDM, *grpname, title[256], title2[256], buf[256], *rname;
     const char *leg[]  = { "D" }; 
 #define NLEG asize(leg) 
     t_filenm fnm[] = {
-        { efTRX, "-f",    NULL,   ffREAD }, 
-        { efTPS, NULL,    NULL,   ffREAD },
-        { efNDX, NULL,    NULL,   ffOPTRD },
-        { efXVG, "-mean", "mean", ffOPTWR },
-        { efXVG, "-var",  "var",  ffOPTWR },
-        { efXVG, "-max",  "max",  ffOPTWR },
-        { efXVG, "-pair", "pair", ffOPTWR },
-        { efXVG, "-ref",  "ref",  ffOPTWR },
+        { efTRX, "-f",      NULL,     ffREAD }, 
+        { efTPS, NULL,      NULL,     ffREAD },
+        { efNDX, NULL,      NULL,     ffOPTRD },
+        { efXVG, "-avg",    "avg",    ffOPTWR },
+        { efXVG, "-var",    "var",    ffOPTWR },
+        { efXVG, "-max",    "max",    ffOPTWR },
+        { efXVG, "-pair",   "pair",   ffOPTWR },
+        { efXVG, "-ref",    "ref",    ffOPTWR },
+        { efXPM, "-map",    "map",    ffOPTWR }, 
+        { efDAT, "-isd",    "isd",    ffOPTWR },
+        { efXVG, "-decorr", "decorr", ffOPTWR },
+        { efXVG, "-mindcr", "mindcr", ffOPTWR },
+        { efXVG, "-maxdcr", "maxdcr", ffOPTWR },
+        { efXVG, "-avgscl", "avgscl", ffOPTWR },
+        { efXVG, "-maxscl", "maxscl", ffOPTWR },
+        { efXVG, "-vdcr",   "vdcr",   ffOPTWR },
+        { efXVG, "-snr",    "snr",    ffOPTWR },
+        { efXVG, "-tdo",    "tdo",    ffOPTWR },
+        { efXVG, "-sens",   "sens",   ffOPTWR },
     }; 
 #define NFILE asize(fnm)
     int npargs;
@@ -215,11 +243,41 @@ int gmx_isdcalc(int argc,char *argv[])
                       NFILE,fnm,npargs,pa,asize(desc),desc,0,NULL,&oenv);
     
     // Output which files?
-    bMean = opt2bSet("-mean", NFILE, fnm);
-    bVar  = opt2bSet("-var",  NFILE, fnm);
-    bMax  = opt2bSet("-max",  NFILE, fnm);
-    bPair = opt2bSet("-pair", NFILE, fnm);
-    bRef  = opt2bSet("-ref",  NFILE, fnm);
+    bAvg    = opt2bSet("-avg",    NFILE, fnm);
+    bVar    = opt2bSet("-var",    NFILE, fnm);
+    bMax    = opt2bSet("-max",    NFILE, fnm);
+    bPair   = opt2bSet("-pair",   NFILE, fnm);
+    bRef    = opt2bSet("-ref",    NFILE, fnm);
+    bMap    = opt2bSet("-map",    NFILE, fnm);
+    bISD    = opt2bSet("-isd",    NFILE, fnm);
+    bDCR    = opt2bSet("-decorr", NFILE, fnm);
+    bMinDCR = opt2bSet("-mindcr", NFILE, fnm);
+    bMaxDCR = opt2bSet("-maxdcr", NFILE, fnm);
+    bAvgSCL = opt2bSet("-avgscl", NFILE, fnm);
+    bMaxSCL = opt2bSet("-maxscl", NFILE, fnm);
+    bVDCR   = opt2bSet("-vdcr",   NFILE, fnm);
+    bSNR    = opt2bSet("-snr",    NFILE, fnm);
+    bTD     = opt2bSet("-tdo",    NFILE, fnm);
+    bSens   = opt2bSet("-sens",   NFILE, fnm);
+    
+    // Check if decorrelation needs to be calculated.
+    if (bDCR || bAvgSCL || bMaxSCL || bVDCR || bSNR || bSens)
+    {
+        bCalcDCR = TRUE;
+    }
+    else
+    {
+        bCalcDCR = FALSE;
+    }
+    // Check if full ISD matrix needs to be calculated.
+    if (bMap || bISD || bCalcDCR || bMinDCR || bMaxDCR)
+    {
+        bISDMat = TRUE;
+    }
+    else
+    {
+        bISDMat = FALSE;
+    }
     
     
     /* Reads the tpr file. Outputs a ton of info.
@@ -245,7 +303,13 @@ int gmx_isdcalc(int argc,char *argv[])
         }
     }
     
-    // If there are no options at command line, do default behavior.
+    
+    /* Since ISDM options were being added and removed frequently, I chose 
+     * to keep track of them as booleans rather than an enum list.
+     * 
+     * 
+     * If there are no options at command line, do default behavior.
+     */
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
               bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
@@ -413,14 +477,13 @@ int gmx_isdcalc(int argc,char *argv[])
     if (bRROT)
     {
         fprintf(stderr,"\nUsing RMSD with random rotation as ISDM.\n");
+        ISDM = "RROT";
         noptions++;
         
         // Additional stuff for option.
         srand(time(NULL));
         // Use up the first few random numbers that usually aren't random.
-        rrot_xyz[0] = (real)rand();
-        rrot_xyz[1] = (real)rand();
-        rrot_xyz[2] = (real)rand();
+        rand(); rand(); rand();
     }
     
     if (bMAMMOTH)
@@ -429,7 +492,7 @@ int gmx_isdcalc(int argc,char *argv[])
         noptions++;
         
         // Additional stuff for option.
-        snew(rnum,iatoms);
+        snew(rnum, iatoms);
         //printf(stderr,"\nOutput sequence (tool).\n\n");
         for (i = 0; i < iatoms; i++)
         {
@@ -541,6 +604,15 @@ int gmx_isdcalc(int argc,char *argv[])
         gmx_fatal(FARGS,"\nThis tool only supports using one optional ISDM at a time.\n");
     }
     
+    // Check for error on -setmax before doing the calculations.
+    if (setmax != -1.0)
+    {
+        if (setmax <= 0.0)
+        {
+            gmx_fatal(FARGS,"\nThe argument for -setmax must be greater than 0.\n");
+        }
+    }
+    
     
     // Opens trj. Reads first frame. Returns status. Allocates mem for x.
     fprintf(stderr,"\nCounting the number of frames.\n");
@@ -557,7 +629,6 @@ int gmx_isdcalc(int argc,char *argv[])
     }
     snew(nweights,natoms);
     snew(iweights,iatoms);
-    snew(diff,iatoms);
     
     // Makes an array of weights. Necessary for reset_x.
     for (i=0; i<iatoms; i++)
@@ -568,13 +639,15 @@ int gmx_isdcalc(int argc,char *argv[])
     }
     
     
-    nframes = 0;
+    nframes = 0, t2 = 0;
     do
     {
         /* This loop doesn't do anything.
          * 
          * It's just the most reliable way to find the number of frames.
          */
+        t1 = t2;
+        t2 = t;
         nframes++;
     } while(read_next_x(oenv,status,&t,natoms,x,box));
     // Close the trajectory.
@@ -584,118 +657,136 @@ int gmx_isdcalc(int argc,char *argv[])
     {
         gmx_fatal(FARGS,"\nThe trajectory must have at least 2 frames.\n");
     }
+    // Calculating variance requires more than 2 frames.
+    if (bVar)
+    {
+        if (nframes < 3)
+        {
+            gmx_fatal(FARGS, "\nCalculating variance requires at least 3 "
+                      "frames.\n");
+        }
+    }
+    // Find trajectory time steps. Assumes even spacing. Find nframes / 2.
+    dt  = t2 - t1;
+    nf2 = nframes / 2;
+    
+    
     
     // Check to see if the user gives a range of frames.
-    if ((bFrame == -1) && (eFrame == -1))
+    if (user_bf == -1)
     {
-        bf = 1;
-        ef = nframes;
+        bf     = 1;
+        ref_bf = 1;
     }
     else
     {
-        if (bFrame == -1)
+        // Error check for first frame being within range 1 to nframes.
+        if ((user_bf < 1) || (user_bf > nframes))
         {
-            // Set bf to default.
+            gmx_fatal(FARGS,"\nArgument to bf must be between 1 and last frame.\n");
+        }
+        if (bISDMat)
+        {
             bf = 1;
         }
         else
         {
-            // Error check for first frame being within range 1 to nframes.
-            if ((bFrame < 1) || (bFrame > nframes))
-            {
-                gmx_fatal(FARGS,"\nArgument to bframe must be between 1 and last frame.\n");
-            }
-            
-            // Assign user input to bf.
-            bf = bFrame;
+            bf = user_bf;
         }
-        
-        if (eFrame == -1)
+        ref_bf = user_bf;
+    }
+    if (user_ef == -1)
+    {
+        ef     = nframes;
+        ref_ef = nframes;
+    }
+    else
+    {
+        // Error check for last frame being within range 1 to nframes.
+        if ((user_ef < 1) || (user_ef > nframes))
         {
-            // Set ef to default.
+            gmx_fatal(FARGS,"\nArgument to ef must be between 1 and last frame.\n");
+        }
+        if (bISDMat)
+        {
             ef = nframes;
         }
         else
         {
-            // Error check for last frame being within range 1 to nframes.
-            if ((eFrame < 1) || (eFrame > nframes))
-            {
-                gmx_fatal(FARGS,"\nArgument to eframe must be between 1 and last frame.\n");
-            }
-            
-            // Assign user input to ef.
-            ef = eFrame;
+            ef = user_ef;
         }
-        
-        if ((bFrame != -1) && (eFrame != -1))
+        ref_ef = user_ef;
+    }
+    // Error check for last frame being greater than first frame.
+    if (ref_bf > ref_ef)
+    {
+        gmx_fatal(FARGS,"\nValue of -ef must be greater than or equal to -bf. "
+                        "\n");
+    }
+    // Check for errors for the -td option before calculations begin.
+    if (bTD)
+    {
+        if (user_td == -1)
         {
-            // Error check for last frame being greater than first frame.
-            if (bFrame > eFrame)
-            {
-                gmx_fatal(FARGS,"\nValue of eframe must be greater than or equal to bframe\n");
-            }
+            gmx_fatal(FARGS,"\nThe -tdo option requires -td to be set. \n");
         }
-    }   
+        if ((user_td >= nframes) || (user_td < 1))
+        {
+            gmx_fatal(FARGS,"\nValue of -td must be between 1 and (nframes - 1). "
+            "\n");
+        }
+    }
+    // Check for errors for the -td option before calculations begin.
+    if (bSens)
+    {
+        if (user_tdsens == -1)
+        {
+            gmx_fatal(FARGS,"\nThe -sens option requires -tdsens to be set. \n");
+        }
+        if ((user_tdsens > (nf2 / 2)) || (user_tdsens < 1))
+        {
+            gmx_fatal(FARGS,"\nValue of -tdsens must be between 1 and "
+                            "(nframes / 4). \n");
+        }
+    }
     
-    // Create an array to hold all frames.
-    snew(frames,nframes);
     
-    
-    // Load first frame to x variable.
-    natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
-    
-    // This is for removing periodic boundary conditions.
-    gpbc = gmx_rmpbc_init(&top.idef, ePBC, natoms, box);
     
     // For -ref option, only do this loop.
     if (bRef)
     {
-        // Update the output.
+        // Load first frame to x variable and initialize PBC removal.
+        natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
+        gpbc = gmx_rmpbc_init(&top.idef, ePBC, natoms, box);
+        // Inform user and open output file.
         fprintf(stderr,"\nCalculating ISD from reference structure.\n");
-        // Open output file.
-        out=xvgropen(opt2fn("-ref", NFILE, fnm), 
-                     "ISD Analysis", 
-                     "Reference Frame", 
-                     "Difference", 
-                     oenv);
+        out = xvgropen(opt2fn("-ref", NFILE, fnm), 
+                       "ISD From Reference Structure", 
+                       "Time", 
+                       "ISD", 
+                       oenv);
         
         /* This section seems hacky since it is not based on all atoms.
          * It might be better to close the trajectory, reload the tpr
          * structure to x, and save the preprocessed frame in this section.
          * However, the trajectory would have to be reopened. This could be
          * slower and would leave strange output at the command line.
+         * 
+         * Remove PBC and centers topframe.
          */
-        // Removes periodic boundary conditions from topframe.
         gmx_rmpbc(gpbc, iatoms, box, topframe);
-        // Centers topframe.
         reset_x(iatoms, NULL, iatoms, NULL, topframe, iweights);
-        
         // Calculation loop for -ref option.
         do
         {
-            // Remove periodic boundary conditions from x.
+            // Remove PBC and center x.
             gmx_rmpbc(gpbc, natoms, box, x);
-            // Centers x. The NULL arguments are necessary to fit based on subset.
             reset_x(natoms, NULL, natoms, NULL, x, nweights);
-            // Save into trjframe.
-            for (j = 0; j < iatoms; j++)
-            {
-                copy_rvec(x[(int)index[j]], trjframe[j]);
-            }
             
-            
-            /* In this section, we'll put calls to all of the ISDMs.
-             * 
-             * Each should have its own if statement, so it is only executed
-             * if that option is specified at the command line.
-             * 
-             * This function doesn't use the output stored in diff.
-             */
-            
-            // Copy ith frame.
+            // Copy topframe for rrot ISDM.
             if (bRROT)
             {
-                // Make a copy of the ith frame.
+                // Make a copy of the topology frame.
                 copy_rvecn(topframe, iframe, 0, iatoms);
                 rframe = iframe;
             }
@@ -703,8 +794,13 @@ int gmx_isdcalc(int argc,char *argv[])
             {
                 rframe = topframe;
             }
-                
-            // Fit the jth frame.
+            // Save current frame into trjframe.
+            for (j = 0; j < iatoms; j++)
+            {
+                copy_rvec(x[(int)index[j]], trjframe[j]);
+            }
+            
+            // Copy trjframe if a fit is required.
             if (bFit)
             {
                 // Need to make a copy of the fit frame or bad stuff will happen.
@@ -718,82 +814,18 @@ int gmx_isdcalc(int argc,char *argv[])
                 cframe = trjframe;
             }
             
+            /* In this section, we'll put calls to all of the ISDMs.
+             * 
+             * This function doesn't use the output stored in diff.
+             */
+            
             // Calls most ISDM options.
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
-            }
-            
-            // RMSD with random rotation. User gives -rrot option.
-            if (bRROT)
-            {
-                // Solve for three random numbers.
-                for (k = 0; k < 3; k++)
-                {
-                    rrot_xyz[k] = 2.0 * pi * ((real)rand() / RAND_MAX) - pi;
-                }
-                // Create x, y, z rotation matrices and multiply.
-                clear_mat(rrotx);
-                clear_mat(rroty);
-                clear_mat(rrotz);
-                /*      Rx = rrotx[rows][cols]
-                 * 
-                 *      |   1.0   |   0.0   |   0.0   |
-                 * Rx = |   0.0   |  cos(x) |  sin(x) |
-                 *      |   0.0   | -sin(x) |  cos(x) |
-                 */
-                rrotx[0][0] = 1.0;
-                rrotx[1][1] = cos(rrot_xyz[0]);
-                rrotx[2][2] = rrotx[1][1];
-                rrotx[1][2] = sin(rrot_xyz[0]);
-                rrotx[2][1] = -1.0 * rrotx[1][2];
-                /*      Ry = rroty[rows][cols]
-                 * 
-                 *      |  cos(x) |   0.0   | -sin(x) |
-                 * Ry = |   0.0   |   1.0   |   0.0   |
-                 *      |  sin(x) |   0.0   |  cos(x) |
-                 */
-                rroty[1][1] = 1.0;
-                rroty[0][0] = cos(rrot_xyz[1]);
-                rroty[2][2] = rroty[0][0];
-                rroty[2][0] = sin(rrot_xyz[1]);
-                rroty[0][2] = -1.0 * rroty[2][0];
-                /*      Rz = rrotz[rows][cols]
-                 * 
-                 *      |  cos(x) |  sin(x) |   0.0   |
-                 * Rz = | -sin(x) |  cos(x) |   0.0   |
-                 *      |   0.0   |   0.0   |   1.0   |
-                 */
-                rrotz[2][2] = 1.0;
-                rrotz[0][0] = cos(rrot_xyz[2]);
-                rrotz[1][1] = rrotz[0][0];
-                rrotz[0][1] = sin(rrot_xyz[2]);
-                rrotz[1][0] = -1.0 * rrotz[0][1];
-                // Multiply rotation matrices.
-                mmul(rrotx, rroty, rrot);
-                copy_mat(rrot, rrotx);
-                mmul(rrotx, rrotz, rrot);
-                // Apply random rotation.
-                for (k = 0; k < iatoms; k++)
-                {
-                    for (m = 0; m < 3; m++)
-                    {
-                        xold[m] = rframe[k][m];
-                    }
-                    for (m = 0; m < 3; m++)
-                    {
-                        rframe[k][m] = 0;
-                        for (n = 0; n < 3; n++)
-                        {
-                            rframe[k][m] += rrot[m][n] * xold[n];
-                        }
-                    }
-                }
-                // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, cframe, rframe));
             }
             
             // MAMMOTH. User gives -mammoth option.
@@ -812,39 +844,36 @@ int gmx_isdcalc(int argc,char *argv[])
             
             
             // Output result to file.
-            fprintf(out,"%10f %10f \n", t, ISD);
+            fprintf(out,"%10f %12.8f \n", t, ISD);
             
         } while(read_next_x(oenv, status, &t, natoms, x, box));
         // Close trajectory and output files.
         close_trj(status);
         ffclose(out);
-        
-        // Check to see if any other output options were chosen.
-        if (!(bMean || bVar || bMax || bPair))
-        {
-            // No other options chosen, so end the program.
-            // Closes the thing that removes periodic boundary conditions.
-            gmx_rmpbc_done(gpbc);
-            
-            // Closing.
-            thanx(stderr);
-            return 0;
-        }
-        else
-        {
-            // If other output options chosen, reopen the trajectory file.
-            natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
-        }
+        // Closes the thing that removes periodic boundary conditions.
+        gmx_rmpbc_done(gpbc);
     }
     
-    // For other options, load trajectory into memory.
+    
+    
+    // Check to see if any other output options were chosen.
+    if (!(bAvg || bVar || bMax || bPair || bISDMat))
+    {
+        // No other options chosen, so end the program.
+        thanx(stderr);
+        return 0;
+    }
+    
     /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
-     * 
-     * Not sure which argument determines which atoms to pull info for.
      */
     fprintf(stderr,"\nStoring trajectory to memory.\n");
+    // Load first frame to x variable and initialize PBC removal.
+    natoms=read_first_x(oenv,&status,ftp2fn(efTRX,NFILE,fnm),&t,&x,box);
+    gpbc = gmx_rmpbc_init(&top.idef, ePBC, natoms, box);
     // Initialize index to keep track of current frame.
     i = 0;
+    // Create an array to hold all frames.
+    snew(frames,nframes);
     do
     {
         // Set aside new memory to store this frame.
@@ -867,26 +896,138 @@ int gmx_isdcalc(int argc,char *argv[])
     gmx_rmpbc_done(gpbc);
     
     
+    
+    // For -tdo option, only do this loop.
+    if (bTD)
+    {
+        // Inform user and open output file.
+        fprintf(stderr,"\nCalculating ISD at time difference set by -td. "
+        "\n\n");
+        char tdString[16];
+        sprintf(tdString, "%d", user_td);
+        out = xvgropen(opt2fn("-tdo", NFILE, fnm), 
+                       strcat("ISD From Frame + td = ", tdString), 
+                       "Time", 
+                       "ISD", 
+                       oenv);
+        
+        /* Main calculation loop.
+         */
+        // Percentage of calculations complete.
+        pcalcs = 1;
+        // Loop through time steps.
+        for (i = 0; i < (nframes - user_td); i++)
+        {
+            j = i + user_td;
+            /* In this section, we'll put calls to all of the ISDMs.
+             */
+            
+            // Copy ith frame.
+            if (bRROT)
+            {
+                // Make a copy of the ith frame.
+                copy_rvecn(frames[i], iframe, 0, iatoms);
+                rframe = iframe;
+            }
+            else
+            {
+                rframe = frames[i];
+            }
+                
+            // Fit the jth frame.
+            if (bFit)
+            {
+                // Need to make a copy of the fit frame or bad stuff will happen.
+                copy_rvecn(frames[j], jframe, 0, iatoms);
+                // Aligns jframe to current reference frame.
+                do_fit(iatoms, iweights, frames[i], jframe);
+                cframe = jframe;
+            }
+            else
+            {
+                cframe = frames[j];
+            }
+            
+            // Calls most ISDM options.
+            if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
+                bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
+                bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT)
+            {
+                ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
+            }
+            
+            // MAMMOTH. User gives -mammoth option.
+            if (bMAMMOTH)
+            {
+                // Calculate MAMMOTH comparison.
+                ISD = calc_mammoth(iatoms, cframe, rframe, rnum);
+            }
+            
+            // ESA.
+            if (bESA)
+            {
+                // Calculate ESA comparison.
+                ISD = calc_esa(iatoms, cframe, rframe);
+            }
+            
+            // Output result to file.
+            fprintf(out,"%10f %12.8f \n", (real)i * dt / 1000.0, ISD);
+            
+            // Update progress output.
+            while ((double)i / (nframes - user_td) >= (double)pcalcs / 100.0)
+            {
+                fprintf(stderr, "\rApproximately %i percent complete.", pcalcs);
+                fflush(stderr);
+                pcalcs++;
+            }
+        }
+        ffclose(out);
+    }
+    
+    
+    
     /* Create arrays to hold output per frame.
      */
-    snew(avgdiff,nframes);
-    snew(maxdiff,nframes);
-    snew(maxframe,nframes);
-    // Only allocate if variance is being calculated.
+    snew(avgISDF,nframes);
+    avgISD = 0.0;
+    snew(maxISDF,nframes);
+    maxISD = 0.0;
+    if (bPair)
+    {
+        snew(maxframe,nframes);
+    }
     if (bVar)
     {
+        snew(varISDF, nframes);
         varISD = 0.0;
-        snew(vardiff, nframes);
     }
-    // Initialize output to 0.
-    maxISD = 0.0;
-    avgISD = 0.0;
+    // Needed to store ISD matrix.
+    if (bISDMat)
+    {
+        snew(ISDMat, nframes);
+        for (i = 0; i < nframes; i++)
+        {
+            snew(ISDMat[i], nframes);
+        }
+    }
+    // Needed for the map figure.
+    if (bMap)
+    {
+        snew(xticks, nframes);
+        snew(yticks, nframes);
+        for (i = 0; i < nframes; i++)
+        {
+            xticks[i] = (real)i;
+            yticks[i] = (real)i;
+        }
+    }
     
     
     
     /* Main calculation loop.
      */
-    fprintf(stderr,"\nCalculating results. \n");
+    fprintf(stderr,"\nCalculating results of means. \n");
     pcalcs = 1;
     
     /* Originally this was designed to only loop through each pair of i and j
@@ -945,78 +1086,9 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
-            }
-            
-            // RMSD with random rotation. User gives -rrot option.
-            if (bRROT)
-            {
-                // Solve for three random numbers.
-                for (k = 0; k < 3; k++)
-                {
-                    rrot_xyz[k] = 2.0 * pi * ((real)rand() / RAND_MAX) - pi;
-                }
-                // Create x, y, z rotation matrices and multiply.
-                clear_mat(rrotx);
-                clear_mat(rroty);
-                clear_mat(rrotz);
-                /*      Rx = rrotx[rows][cols]
-                 * 
-                 *      |   1.0   |   0.0   |   0.0   |
-                 * Rx = |   0.0   |  cos(x) |  sin(x) |
-                 *      |   0.0   | -sin(x) |  cos(x) |
-                 */
-                rrotx[0][0] = 1.0;
-                rrotx[1][1] = cos(rrot_xyz[0]);
-                rrotx[2][2] = rrotx[1][1];
-                rrotx[1][2] = sin(rrot_xyz[0]);
-                rrotx[2][1] = -1.0 * rrotx[1][2];
-                /*      Ry = rroty[rows][cols]
-                 * 
-                 *      |  cos(x) |   0.0   | -sin(x) |
-                 * Ry = |   0.0   |   1.0   |   0.0   |
-                 *      |  sin(x) |   0.0   |  cos(x) |
-                 */
-                rroty[1][1] = 1.0;
-                rroty[0][0] = cos(rrot_xyz[1]);
-                rroty[2][2] = rroty[0][0];
-                rroty[2][0] = sin(rrot_xyz[1]);
-                rroty[0][2] = -1.0 * rroty[2][0];
-                /*      Rz = rrotz[rows][cols]
-                 * 
-                 *      |  cos(x) |  sin(x) |   0.0   |
-                 * Rz = | -sin(x) |  cos(x) |   0.0   |
-                 *      |   0.0   |   0.0   |   1.0   |
-                 */
-                rrotz[2][2] = 1.0;
-                rrotz[0][0] = cos(rrot_xyz[2]);
-                rrotz[1][1] = rrotz[0][0];
-                rrotz[0][1] = sin(rrot_xyz[2]);
-                rrotz[1][0] = -1.0 * rrotz[0][1];
-                // Multiply rotation matrices.
-                mmul(rrotx, rroty, rrot);
-                copy_mat(rrot, rrotx);
-                mmul(rrotx, rrotz, rrot);
-                // Apply random rotation.
-                for (k = 0; k < iatoms; k++)
-                {
-                    for (m = 0; m < 3; m++)
-                    {
-                        xold[m] = rframe[k][m];
-                    }
-                    for (m = 0; m < 3; m++)
-                    {
-                        rframe[k][m] = 0;
-                        for (n = 0; n < 3; n++)
-                        {
-                            rframe[k][m] += rrot[m][n] * xold[n];
-                        }
-                    }
-                }
-                // Calculate RMSD after rotation.
-                ISD = sqrt(calc_msd(iatoms, cframe, rframe));
             }
             
             // MAMMOTH. User gives -mammoth option.
@@ -1034,28 +1106,37 @@ int gmx_isdcalc(int argc,char *argv[])
             }
             
             
+            
+            // Store ISD to the ISD matrix.
+            if (bISDMat)
+            {
+                ISDMat[i][j] = ISD;
+            }
             // Calculate summations with doubles for improved accuracy.
             dISD = (double)ISD;
             // Update mean and max.
-            avgdiff[i] += dISD;
-            if (dISD > maxdiff[i])
+            avgISDF[i] += dISD;
+            if (dISD > maxISDF[i])
             {
-                maxdiff[i]  = dISD;
-                maxframe[i] = j;
+                maxISDF[i] = dISD;
+                if (bPair)
+                {
+                    maxframe[i] = j;
+                }
             }
-            
             // If calculating variance, calculate the sum of squares.
             if (bVar)
             {
-                vardiff[i] += (dISD * dISD);
+                varISDF[i] += (dISD * dISD);
             }
         }
         
         // Divide by N-1.
-        avgdiff[i] /= (nframes - 1);
+        avgISDF[i] /= (nframes - 1);
         if (bVar)
         {
-            vardiff[i] /= (nframes - 1);
+            // Unbiased sample variance.
+            varISDF[i] /= (nframes - 2);
         }
         
         // Update progress output.
@@ -1068,33 +1149,35 @@ int gmx_isdcalc(int argc,char *argv[])
     }
     
     // Print output to specified files.
-    if (bMean)
+    if (bAvg)
     {
-        out=xvgropen(opt2fn("-mean", NFILE, fnm), 
+        out=xvgropen(opt2fn("-avg", NFILE, fnm), 
                      "ISD Analysis", 
                      "Reference Frame", 
-                     "Mean Difference", 
+                     "Average Difference", 
                      oenv);
         
-        for (i = (bf - 1); i < ef; i++)
+        for (i = (ref_bf - 1); i < ref_ef; i++)
         {
-            fprintf(out,"%-6i %10f \n", (i+1), avgdiff[i]);
+            fprintf(out,"%-6i %10f \n", (i+1), avgISDF[i]);
         }
         ffclose(out);
     }
     
     if (bVar)
     {
-        out=xvgropen(opt2fn("-var", NFILE, fnm), 
-                     "ISD Analysis", 
-                     "Reference Frame", 
-                     "Variance of Difference", 
-                     oenv);
+        out = xvgropen(opt2fn("-var", NFILE, fnm), 
+                       "ISD Analysis", 
+                       "Reference Frame", 
+                       "Variance of Difference", 
+                       oenv);
         
-        for (i = (bf - 1); i < ef; i++)
+        double vCorrect = (double)(nframes - 1.0) / (nframes - 2.0);
+        for (i = (ref_bf - 1); i < ref_ef; i++)
         {
-            msqi = avgdiff[i] * avgdiff[i];
-            fprintf(out,"%-6i %10f \n", (i+1), (vardiff[i] - msqi));
+            // Unbiased sample variance requires a correction.
+            msqISD = avgISDF[i] * avgISDF[i] * vCorrect;
+            fprintf(out,"%-6i %12.8f \n", (i+1), (varISDF[i] - msqISD));
         }
         ffclose(out);
     }
@@ -1107,9 +1190,9 @@ int gmx_isdcalc(int argc,char *argv[])
                      "Maximum Difference", 
                      oenv);
         
-        for (i = (bf - 1); i < ef; i++)
+        for (i = (ref_bf - 1); i < ref_ef; i++)
         {
-            fprintf(out,"%-6i %10f \n", (i+1), maxdiff[i]);
+            fprintf(out,"%-6i %12.8f \n", (i+1), maxISDF[i]);
         }
         ffclose(out);
     }
@@ -1117,51 +1200,386 @@ int gmx_isdcalc(int argc,char *argv[])
     if (bPair)
     {
         out=xvgropen(opt2fn("-pair", NFILE, fnm), 
-                     "ISD Analysis", 
+                     "Paired Maximally Distant Structures", 
                      "Reference Frame", 
                      "Maximally Different Frame", 
                      oenv);
         
-        for (i = (bf - 1); i < ef; i++)
+        for (i = (ref_bf - 1); i < ref_ef; i++)
         {
             fprintf(out,"%-6i %-6i \n", (i+1), (maxframe[i] + 1));
         }
         ffclose(out);
     }
     
-    // Sum all mean diff.
-    for (i = (bf - 1); i < ef; i++)
+    if (bISD)
     {
-        // Sum up the per frame totals to an overall total.
-        avgISD += avgdiff[i];
-        if (maxdiff[i] > maxISD)
+        // Opens the output file.
+        out = opt2FILE("-isd", NFILE, fnm, "w");
+        
+        // Write output.
+        for (i = 0; i < nframes; i++)
         {
-            maxISD  = maxdiff[i];
-            maxframei = i;
+            fprintf(out, "%12.8f", ISDMat[i][0]);
+            for (j = 1; j < nframes; j++)
+            {
+                fprintf(out, ",%12.8f", ISDMat[i][j]);
+            }
+            fprintf(out, "\n");
+        }
+        
+        // Close the output file.
+        ffclose(out);
+    }
+    
+    if (bMap)
+    {
+        // Opens the output file.
+        out = opt2FILE("-map", NFILE, fnm, "w");
+        // Needed for write_xpm.
+        rlo.r = 0; rlo.g = 0; rlo.b = 1;
+        rmd.r = 1; rmd.g = 1; rmd.b = 0;
+        rhi.r = 1; rhi.g = 0; rhi.b = 0;
+        
+        // Need overall average and max ISD for ALL frames.
+        for (i = 0; i < nframes; i++)
+        {
+            avgISD += avgISDF[i];
+            if (maxISD < maxISDF[i])
+            {
+                maxISD = maxISDF[i];
+            }
+        }
+        avgISD /= nframes;
+        
+        // Choose the maximum value for the xpm.
+        if (setmax == -1.0)
+        {
+            xpm_max = (real)maxISD;
+        }
+        else
+        {
+            if (setmax > avgISD)
+            {
+                xpm_max = setmax;
+            }
+            else
+            {
+                fprintf(stderr, "\nWarning: the argument for -setmax must be "
+                                "greater than the average ISD. The maximum "
+                                "map value will be reset to the default.\n");
+            }
+        }
+        
+        // Write to the output file.
+        sprintf(buf,"Frame vs Frame");
+        unsigned int tmp = 0;
+        write_xpm_header(out, buf, "ISD", "Frame", "Frame", FALSE);
+        write_mat_levels3(out, nframes, nframes, &nlevels, 0, (real)avgISD, xpm_max, rlo, rmd, rhi);
+        write_xpm_axis(out, "x", tmp & MAT_SPATIAL_X, nframes, xticks);
+        write_xpm_axis(out, "y", tmp & MAT_SPATIAL_Y, nframes, yticks);
+        write_mat_pixels3(out, nframes, nframes, ISDMat, 0, (real)avgISD, xpm_max, nlevels);
+        
+        // Close the output file.
+        ffclose(out);
+        
+        // Reset some values.
+        avgISD = 0.0;
+        maxISD = 0.0;
+    }
+    
+    if (bCalcDCR)
+    {
+        snew(DCR, nf2);
+        for (ij = 1; ij < nf2; ij++)
+        {
+            for (i = 0; i < (nframes - ij); i++)
+            {
+                j = i + ij;
+                DCR[ij] += (double)ISDMat[i][j];
+            }
+            DCR[ij] /= (nframes - ij);
         }
     }
-    avgISD /= (ef - bf + 1);
+    
+    if (bDCR)
+    {
+        out = xvgropen(opt2fn("-decorr", NFILE, fnm), 
+                       "ISD Decorrelation", 
+                       "Time From Reference Frame (ns)", 
+                       "Mean ISD", 
+                       oenv);
+        
+        for (i = 0; i < nf2; i++)
+        {
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, DCR[i]);
+        }
+        ffclose(out);
+    }
+    
+    if (bVDCR || bSNR)
+    {
+        // Solve for the variance of the decorrelation.
+        snew(VDCR, nf2);
+        double vCorrect;
+        for (ij = 1; ij < nf2; ij++)
+        {
+            for (i = 0; i < (nframes - ij); i++)
+            {
+                j = i + ij;
+                dISD = (double)ISDMat[i][j];
+                VDCR[ij] += dISD * dISD;
+            }
+            // Unbiased sample variance
+            VDCR[ij] /= (nframes - ij - 1);
+            vCorrect  = (double)(nframes - ij) / (nframes - ij - 1.0);
+            VDCR[ij] -= DCR[ij] * DCR[ij] * vCorrect;
+        }
+    }
+    
+    if (bVDCR)
+    {
+        out = xvgropen(opt2fn("-vdcr", NFILE, fnm), 
+                       "Variance of ISD Decorrelation", 
+                       "Time From Reference Frame (ns)", 
+                       "Variance of ISD", 
+                       oenv);
+        
+        for (i = 0; i < nf2; i++)
+        {
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, VDCR[i]);
+        }
+        ffclose(out);
+    }
+    
+    if (bSNR)
+    {
+        out = xvgropen(opt2fn("-snr", NFILE, fnm), 
+                       "ISD Decorrelation SNR", 
+                       "Time From Reference Frame (ns)", 
+                       "SNR: Sample Mean / Corrected Sample Standard Deviation", 
+                       oenv);
+        
+        snew(SNR, nf2);
+        for (i = 1; i < nf2; i++)
+        {
+            SNR[i] = DCR[i] / sqrt(VDCR[i]);
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, SNR[i]);
+        }
+        ffclose(out);
+    }
+    
+    if (bAvgSCL)
+    {
+        out = xvgropen(opt2fn("-avgscl", NFILE, fnm), 
+                       "Decorrelation of ISD", 
+                       "Time From Reference Frame (ns)", 
+                       "Mean ISD / Mean Decorrelated ISD", 
+                       oenv);
+        
+        for (i = 0; i < nf2; i++)
+        {
+            avgSCL += DCR[i];
+        }
+        avgSCL /= nf2;
+        
+        for (i = 0; i < nf2; i++)
+        {
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, DCR[i] / avgSCL);
+        }
+        ffclose(out);
+    }
+    
+    if (bMaxSCL)
+    {
+        out = xvgropen(opt2fn("-maxscl", NFILE, fnm), 
+                       "Decorrelation of ISD", 
+                       "Time From Reference Frame (ns)", 
+                       "Mean ISD / Maximum Decorrelated ISD", 
+                       oenv);
+        
+        maxSCL = -1.0;
+        for (i = 0; i < nf2; i++)
+        {
+            if (DCR[i] > (double)maxSCL)
+            {
+                maxSCL = (double)DCR[i];
+            }
+        }
+        
+        for (i = 0; i < nf2; i++)
+        {
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, DCR[i] / maxSCL);
+        }
+        ffclose(out);
+    }
+    
+    if (bMinDCR)
+    {
+        out = xvgropen(opt2fn("-mindcr", NFILE, fnm), 
+                       "Decorrelation of Minimum ISD", 
+                       "Time From Reference Frame (ns)", 
+                       "Minimum ISD", 
+                       oenv);
+        
+        for (ij = 1; ij < nf2; ij++)
+        {
+            minDCR = 1000000.0;
+            for (i = 0; i < (nframes - ij); i++)
+            {
+                j = i + ij;
+                if (ISDMat[i][j] < minDCR)
+                {
+                    minDCR = ISDMat[i][j];
+                }
+            }
+            fprintf(out, "%10f %12.8f \n", (real)ij * dt / 1000.0, minDCR);
+        }
+        ffclose(out);
+    }
+    
+    if (bMaxDCR)
+    {
+        out = xvgropen(opt2fn("-maxdcr", NFILE, fnm), 
+                       "Decorrelation of Minimum ISD", 
+                       "Time From Reference Frame (ns)", 
+                       "Minimum ISD", 
+                       oenv);
+        
+        for (ij = 1; ij < nf2; ij++)
+        {
+            maxDCR = -1.0;
+            for (i = 0; i < (nframes - ij); i++)
+            {
+                j = i + ij;
+                if (ISDMat[i][j] > maxDCR)
+                {
+                    maxDCR = ISDMat[i][j];
+                }
+            }
+            fprintf(out, "%10f %12.8f \n", (real)ij * dt / 1000.0, maxDCR);
+        }
+        ffclose(out);
+    }
+    
+    if (bSens)
+    {
+        oobc = 0;
+        double DCRi, DCRj, DCRij, DCRdt, ijSens;
+        snew(sens, (nf2 - user_tdsens));
+        sens[0] = 1.0;
+        for (i = 1; i < (nf2 - user_tdsens); i++)
+        {
+            for (ij = 1; ij < user_tdsens; ij++)
+            {
+                j = i + ij;
+                DCRi  = DCR[i]; DCRj = DCR[j]; DCRij = DCR[ij];
+                DCRdt = DCRj - DCRi; ijSens = DCRdt / DCRij;
+                if (DCRij == 0.0)
+                {
+                    if (DCRdt > 0.0)
+                    {
+                        sens[i] += 1.0;
+                        oobc++;
+                    }
+                    else if (DCRdt < 0.0)
+                    {
+                        sens[i] -= 1.0;
+                        oobc++;
+                    }
+                }
+                else
+                {
+                    if (ijSens > 1.0)
+                    {
+                        sens[i] += 1.0;
+                        oobc++;
+                    }
+                    else if (ijSens < -1.0)
+                    {
+                        sens[i] -= 1.0;
+                        oobc++;
+                    }
+                    else
+                    {
+                        sens[i] += ijSens;
+                    }
+                }
+            }
+            sens[i] /= user_tdsens - 1.0;
+        }
+        
+        out = xvgropen(opt2fn("-sens", NFILE, fnm), 
+                       "Sensitivity Analysis", 
+                       "Time From Reference Frame (ns)", 
+                       "Sensitivity", 
+                       oenv);
+        
+        for (i = 0; i < (nf2 - user_tdsens); i++)
+        {
+            fprintf(out, "%10f %12.8f \n", (real)i * dt / 1000.0, sens[i]);
+        }
+        ffclose(out);
+    }
+    
+    
+    
+    // Sum all mean diff.
+    for (i = (ref_bf - 1); i < ref_ef; i++)
+    {
+        // Sum up the per frame totals to an overall total.
+        avgISD += avgISDF[i];
+        if (maxISDF[i] > maxISD)
+        {
+            maxISD = maxISDF[i];
+            if (bPair)
+            {
+                maxframei = i;
+            }
+        }
+    }
+    avgISD /= (ref_ef - ref_bf + 1);
     
     if (bVar)
     {
-        for (i = (bf - 1); i < ef; i++)
+        double vCorrect = (double)(ref_ef - ref_bf + 1.0) * (nframes - 1.0);
+        for (i = (ref_bf - 1); i < ref_ef; i++)
         {
-            varISD += vardiff[i];
+            varISD += (nframes - 2.0) * varISDF[i];
         }
-        varISD /= (ef - bf + 1);
-        varISD -= (avgISD * avgISD);
+        varISD /= vCorrect - 1.0;
+        varISD -= (avgISD * avgISD) * vCorrect / (vCorrect - 1.0);
     }
     
     // Output the final information.
-    printf("\n\nMean Difference: %10f \n", avgISD);
+    printf("\n\nAverage ISD: %12.8f \n", avgISD);
     if (bVar)
     {
-        printf("Variance of Difference: %10f \n", varISD);
+        printf("Variance of ISD: %12.8f \n", varISD);
+        printf("SNR of ISD: %12.8f \n", avgISD / sqrt(varISD));
     }
-    printf("Maximum Difference: %10f \n", maxISD);
-    printf("Maximally Different Pair of Frames: %-6i %-6i \n", 
-           (maxframei + 1), 
-           (maxframe[maxframei] + 1));
+    printf("Maximum ISD: %12.8f \n", maxISD);
+    if (bPair)
+    {
+        printf("Maximally Different Pair of Frames: %-6i %-6i \n", 
+               (maxframei + 1), 
+               (maxframe[maxframei] + 1));
+    }
+    if (bSNR)
+    {
+        for (i = 1; i < nf2; i++)
+        {
+            dSNR += SNR[i];
+        }
+        dSNR /= nf2 - 1.0;
+        printf("\nSNR of ISD Decorrelation: %12.8f \n", dSNR);
+    }
+    if (bSens)
+    {
+        int nSens = (nf2 - user_tdsens - 1) * (user_tdsens - 1);
+        printf("\nNumber of out of bounds corrections is %-10i out of %-10i "
+               "possible. \n", oobc, nSens);
+    }
     
     // Not sure what this one does. Sends to xmgrace?
     do_view(oenv,ftp2fn(efXVG,NFILE,fnm),"-nxy");
@@ -1170,3 +1588,186 @@ int gmx_isdcalc(int argc,char *argv[])
     thanx(stderr);
     return 0;
 }
+
+
+
+/* The below section is from gromacs code which was released separately under 
+ * the LGPL version 2 license.
+ */
+
+void write_mat_levels(FILE *out,int n_x, int n_y,int *nlevels,real lo,real hi,t_rgb rlo,t_rgb rhi)
+{
+    static const char cmap[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"
+                               "uvwxyz0123456789!@#$%^&*()-_=+{}|;:',<.>/?";
+    int    lenMap = 88;
+    int    i,nlo;
+    real   invlevel,r,g,b;
+    
+    if (*nlevels > lenMap*lenMap) {
+        fprintf(stderr,"Warning, too many levels (%d) in matrix, using %d only\n",
+                *nlevels,(int)(lenMap*lenMap));
+        *nlevels=lenMap*lenMap;
+    }
+    else if (*nlevels < 2) {
+        fprintf(stderr,"Warning, too few levels (%d) in matrix, using 2 instead\n",*nlevels);
+        *nlevels=2;
+    }
+    
+    fprintf(out,"static char *gromacs_xpm[] = {\n");
+    fprintf(out,"\"%d %d   %d %d\",\n",
+            n_x,n_y,*nlevels,(*nlevels <= lenMap) ? 1 : 2);
+    
+    invlevel=1.0/(*nlevels-1);
+    for(i=0; (i<*nlevels); i++) {
+        nlo=*nlevels-1-i;
+        r=(nlo*rlo.r+i*rhi.r)*invlevel;
+        g=(nlo*rlo.g+i*rhi.g)*invlevel;
+        b=(nlo*rlo.b+i*rhi.b)*invlevel;
+        fprintf(out,"\"%c%c c #%02X%02X%02X \" /* \"%.3g\" */,\n",
+                cmap[i % lenMap],(*nlevels <= lenMap) ? ' ' : cmap[i/lenMap],
+                                  (unsigned int)((int)((255*r) + 0.5)),
+                                  (unsigned int)((int)((255*g) + 0.5)),
+                                  (unsigned int)((int)((255*b) + 0.5)),
+                                  (nlo*lo+i*hi)*invlevel);
+    }
+}
+
+
+
+void write_mat_levels3(FILE *out,int n_x,int n_y,int *nlevels,real lo,real mid,real hi,t_rgb rlo,t_rgb rmid,t_rgb rhi)
+{
+    static const char cmap[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"
+                               "uvwxyz0123456789!@#$%^&*()-_=+{}|;:',<.>/?";
+    int    lenMap = 88;
+    int    i,nmid;
+    real   r,g,b,clev_lo,clev_hi;
+    
+    if (*nlevels > lenMap*lenMap) {
+        fprintf(stderr,"Warning, too many levels (%d) in matrix, using %d only\n",
+                *nlevels,(int)(lenMap*lenMap));
+        *nlevels=lenMap*lenMap;
+    }
+    else if (*nlevels < 2) {
+        fprintf(stderr,"Warning, too few levels (%d) in matrix, using 2 instead\n",
+                *nlevels);
+        *nlevels=2;
+    }   
+    if (!((mid >= lo) && (mid < hi)))
+        gmx_fatal(FARGS,"Lo: %f, Mid: %f, Hi: %f\n",lo,mid,hi);
+    
+    fprintf(out,"static char *gromacs_xpm[] = {\n");
+    fprintf(out,"\"%d %d   %d %d\",\n",
+            n_x,n_y,*nlevels,(*nlevels <= lenMap) ? 1 : 2);
+    
+    nmid    = min(max(0,((mid-lo)/(hi-lo))*((*nlevels)-1)),(*nlevels)-1);
+    clev_lo = nmid;
+    clev_hi = (*nlevels - 1 - nmid);
+    for(i=0; (i<nmid); i++) {
+        r   = rlo.r+(i*(rmid.r-rlo.r)/clev_lo);
+        g   = rlo.g+(i*(rmid.g-rlo.g)/clev_lo);
+        b   = rlo.b+(i*(rmid.b-rlo.b)/clev_lo);
+        fprintf(out,"\"%c%c c #%02X%02X%02X \" /* \"%.3g\" */,\n",
+                cmap[i % lenMap],
+                (*nlevels <= lenMap) ? ' ' : cmap[i/lenMap],
+                 (unsigned int)((int)((255*r) + 0.5)),
+                 (unsigned int)((int)((255*g) + 0.5)),
+                 (unsigned int)((int)((255*b) + 0.5)),
+                 ((nmid - i)*lo + i*mid)/clev_lo);
+    }
+    for(i=0; (i<(*nlevels-nmid)); i++) {
+        r   = rmid.r+(i*(rhi.r-rmid.r)/clev_hi);
+        g   = rmid.g+(i*(rhi.g-rmid.g)/clev_hi);
+        b   = rmid.b+(i*(rhi.b-rmid.b)/clev_hi);
+        fprintf(out,"\"%c%c c #%02X%02X%02X \" /* \"%.3g\" */,\n",
+                cmap[(i+nmid) % lenMap],
+                (*nlevels <= lenMap) ? ' ' : cmap[(i+nmid)/lenMap],
+                 (unsigned int)((int)((255*r) + 0.5)),
+                 (unsigned int)((int)((255*g) + 0.5)),
+                 (unsigned int)((int)((255*b) + 0.5)),
+                 ((*nlevels - 1 - nmid - i)*mid + i*hi)/clev_hi);
+    }
+}
+
+
+
+void write_mat_pixels(FILE *out,int n_x,int n_y,real **matrix,real lo,real hi,int nlevels)
+{
+    static const char cmap[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"
+                               "uvwxyz0123456789!@#$%^&*()-_=+{}|;:',<.>/?";
+    int  lenMap = 88;
+    int  i,j,c;
+    real invlevel;
+    
+    invlevel=(nlevels-1)/(hi-lo);
+    //printf("\n");
+    for(j=n_y-1; (j>=0); j--) {
+        if(j%(1+n_y/100)==0) 
+            fprintf(stderr,"%3d%%\b\b\b\b",(100*(n_y-j))/n_y);
+        fprintf(out,"\"");
+        for(i=0; (i<n_x); i++) {
+            c=gmx_nint((matrix[i][j]-lo)*invlevel);
+            if (c<0) c=0;
+            if (c>=nlevels) c=nlevels-1;
+            if (nlevels <= lenMap)
+            {
+                fprintf(out,"%c",cmap[c]);
+                //printf("%c",matmap[c]);
+            }
+            else
+            {
+                fprintf(out,"%c%c",cmap[c % lenMap],cmap[c / lenMap]);
+            }
+        }
+        if (j > 0)
+            fprintf(out,"\",\n");
+        else
+            fprintf(out,"\"\n");
+        //printf("\n");
+    }
+}
+
+
+
+void write_mat_pixels3(FILE *out,int n_x,int n_y,real **matrix,real lo,real mid,real hi,int nlevels)
+{
+    static const char cmap[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrst"
+                               "uvwxyz0123456789!@#$%^&*()-_=+{}|;:',<.>/?";
+    int  lenMap = 88;
+    int  i,j,c=0,nmid;
+    real invlev_lo,invlev_hi;
+    
+    nmid = min(max(0,((mid-lo)/(hi-lo))*((nlevels)-1)),(nlevels)-1);
+    invlev_hi=(nlevels-1-nmid)/(hi-mid);
+    invlev_lo=(nmid)/(mid-lo);
+    
+    for(j=n_y-1; (j>=0); j--) {
+        if(j%(1+n_y/100)==0) 
+            fprintf(stderr,"%3d%%\b\b\b\b",(100*(n_y-j))/n_y);
+        fprintf(out,"\"");
+        for(i=0; (i<n_x); i++) {
+            if (matrix[i][j] >= mid)
+                c=nmid+gmx_nint((matrix[i][j]-mid)*invlev_hi);
+            else if (matrix[i][j] >= lo)
+                c=gmx_nint((matrix[i][j]-lo)*invlev_lo);
+            else
+                c = 0;
+            
+            if (c<0) 
+                c=0;
+            if (c>=nlevels) 
+                c=nlevels-1;
+            if (nlevels <= lenMap)
+                fprintf(out,"%c",cmap[c]);
+            else
+                fprintf(out,"%c%c",cmap[c % lenMap],cmap[c / lenMap]);
+        }
+        if (j > 0)
+            fprintf(out,"\",\n");
+        else
+            fprintf(out,"\"\n");
+    }
+}
+
+/* The above section is from gromacs code which was released separately under 
+ * the LGPL version 2 license.
+ */

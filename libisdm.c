@@ -2795,6 +2795,85 @@ real calc_rg(int iatoms, rvec frame[])
 
 
 
+real calc_rrot(int iatoms, rvec frame[], rvec rframe[])
+{
+    int    i, j, k;
+    double rx, ry, rz;
+    double pi20 = 3.14159265358979323846;
+    rvec   xold;
+    matrix rotx, roty, rotz, rotm;
+    
+    // Solve for three random numbers.
+    rx = 2.0 * pi20 * rand() / RAND_MAX - pi20;
+    ry = 2.0 * pi20 * rand() / RAND_MAX - pi20;
+    rz = 2.0 * pi20 * rand() / RAND_MAX - pi20;
+    // Reset matrices to zero.
+    clear_mat(rotx);
+    clear_mat(roty);
+    clear_mat(rotz);
+    
+    /*      Rx = rotx[rows][cols]
+     * 
+     *      |   1.0   |   0.0   |   0.0   |
+     * Rx = |   0.0   |  cos(x) |  sin(x) |
+     *      |   0.0   | -sin(x) |  cos(x) |
+     */
+    rotx[0][0] = 1.0;
+    rotx[1][1] = (real)cos(rx);
+    rotx[2][2] = rotx[1][1];
+    rotx[1][2] = (real)sin(rx);
+    rotx[2][1] = -1.0 * rotx[1][2];
+    
+    /*      Ry = roty[rows][cols]
+     * 
+     *      |  cos(x) |   0.0   | -sin(x) |
+     * Ry = |   0.0   |   1.0   |   0.0   |
+     *      |  sin(x) |   0.0   |  cos(x) |
+     */
+    roty[1][1] = 1.0;
+    roty[0][0] = (real)cos(ry);
+    roty[2][2] = roty[0][0];
+    roty[2][0] = (real)sin(ry);
+    roty[0][2] = -1.0 * roty[2][0];
+    
+    /*      Rz = rotz[rows][cols]
+     * 
+     *      |  cos(x) |  sin(x) |   0.0   |
+     * Rz = | -sin(x) |  cos(x) |   0.0   |
+     *      |   0.0   |   0.0   |   1.0   |
+     */
+    rotz[2][2] = 1.0;
+    rotz[0][0] = (real)cos(rz);
+    rotz[1][1] = rotz[0][0];
+    rotz[0][1] = (real)sin(rz);
+    rotz[1][0] = -1.0 * rotz[0][1];
+    
+    // Multiply rotation matrices.
+    mmul(rotx, roty, rotm);
+    copy_mat(rotm, rotx);
+    mmul(rotx, rotz, rotm);
+    // Apply random rotation.
+    for (k = 0; k < iatoms; k++)
+    {
+        for (i = 0; i < 3; i++)
+        {
+            xold[i] = rframe[k][i];
+        }
+        for (i = 0; i < 3; i++)
+        {
+            rframe[k][i] = 0.0;
+            for (j = 0; j < 3; j++)
+            {
+                rframe[k][i] += rotm[i][j] * xold[j];
+            }
+        }
+    }
+    // Calculate RMSD after rotation.
+    return calc_rmsd(iatoms, frame, rframe);
+}
+
+
+
 real calc_mammoth(int iatoms,rvec frame[],rvec rframe[],int* rnum)
 {
     return 0.0; //temporary, should be removed by patch
@@ -3080,6 +3159,12 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
     {
         // Calculate backbone angle correlation.
         return calc_corr_angs(iatoms,cframe,rframe);
+    }
+    
+    if (strcmp(ISDM, "RROT") == 0)
+    {
+        // Randomly rotated RMSD.
+        return calc_rrot(iatoms, cframe, rframe);
     }
 }
 
