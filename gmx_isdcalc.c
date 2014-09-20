@@ -736,7 +736,7 @@ int gmx_isdcalc(int argc,char *argv[])
             "\n");
         }
     }
-    // Check for errors for the -td option before calculations begin.
+    // Check for errors for the -tdsens option before calculations begin.
     if (bSens)
     {
         if (user_tdsens == -1)
@@ -857,7 +857,7 @@ int gmx_isdcalc(int argc,char *argv[])
     
     
     // Check to see if any other output options were chosen.
-    if (!(bAvg || bVar || bMax || bPair || bISDMat))
+    if (!(bAvg || bVar || bMax || bPair || bTD || bISDMat))
     {
         // No other options chosen, so end the program.
         thanx(stderr);
@@ -901,12 +901,13 @@ int gmx_isdcalc(int argc,char *argv[])
     if (bTD)
     {
         // Inform user and open output file.
-        fprintf(stderr,"\nCalculating ISD at time difference set by -td. "
-        "\n\n");
-        char tdString[16];
-        sprintf(tdString, "%d", user_td);
+        fprintf(stderr, "\nCalculating ISD at time difference set by -td. "
+                        "\n\n");
+        char hdString[32] = "ISD From Frame + td = ";
+        char tdString[8];
+        sprintf(tdString, "%6i", user_td);
         out = xvgropen(opt2fn("-tdo", NFILE, fnm), 
-                       strcat("ISD From Frame + td = ", tdString), 
+                       strcat(hdString, tdString), 
                        "Time", 
                        "ISD", 
                        oenv);
@@ -983,6 +984,13 @@ int gmx_isdcalc(int argc,char *argv[])
             }
         }
         ffclose(out);
+    }
+    // Check to see if any other output options were chosen.
+    if (!(bAvg || bVar || bMax || bPair || bISDMat))
+    {
+        // No other options chosen, so end the program.
+        thanx(stderr);
+        return 0;
     }
     
     
