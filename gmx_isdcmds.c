@@ -1444,7 +1444,7 @@ int gmx_isdcmds(int argc,char *argv[])
     fprintf(out, "if (p.Results.PauseTime > 0.0)\n    ");
     fprintf(out, "pause(p.Results.PauseTime);\n  end\n  ");
     fprintf(out, "if (p.Results.TimeStep > 0.0)\n    ");
-    fprintf(out, "iTime  = num2str(i * p.Results.TimeStep);\n  ");
+    fprintf(out, "iTime  = num2str(i * p.Results.TimeStep);\n    ");
     fprintf(out, "iTime  = strcat(iTime,' ns');\n  ");
     fprintf(out, "else\n    ");
     fprintf(out, "iTime  = '';\n  end\n  ");
