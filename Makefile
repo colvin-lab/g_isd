@@ -1,7 +1,7 @@
 ### This works for a default install of gromacs from source.
 ### Gromacs library linking...
-GMXINC=/usr/local/gromacs/include
-GMXLIB=/usr/local/gromacs/lib
+GMXINC=/usr/local/gromacs-4.6.5/include
+GMXLIB=/usr/local/gromacs-4.6.5/lib
 OPTIONS=-g -O2 -I$(GMXINC) -L$(GMXLIB)
 LIBLINKS=-lgmx -lgmxana -lm
 INSTALL_BINS=g_isdcalc g_isdcmds g_isdorder
