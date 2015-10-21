@@ -2,7 +2,7 @@
 ### Gromacs library linking...
 GMXINC=/usr/local/gromacs-4.6.5/include
 GMXLIB=/usr/local/gromacs-4.6.5/lib
-OPTIONS=-g -O2 -I$(GMXINC) -L$(GMXLIB)
+OPTIONS=-g -O2 -fopenmp -I$(GMXINC) -L$(GMXLIB)
 LIBLINKS=-lgmx -lgmxana -lm
 INSTALL_BINS=g_isdcalc g_isdcmds g_isdorder
 INSTALL_PATH=$(HOME)/bin

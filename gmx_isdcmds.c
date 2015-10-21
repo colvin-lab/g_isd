@@ -35,14 +35,16 @@
 
 
 
-void mat_mult_mat(real* mat1, real* mat2, int m, int n, int o, real* out)
+void mat_mult_mat(real* mat1, real* mat2, int m, int n, int o, real* out, gmx_bool bMP)
 {
   /* Assume a is an array of doubles m by n in dimensions.
    * Assume b is an array of doubles n by o in dimensions.
    * Out should point to enough memory to store m by o doubles.
    */
-  int i, j, k;
+  int i;
+  #pragma omp parallel for schedule(dynamic) if (bMP)
   for (i = 0; i < m; i++) {
+    int j, k;
     for (k = 0; k < o; k++) {
       out[(i * m) + k] = 0;
       for (j = 0; j < n; j++) {
@@ -75,7 +77,6 @@ void mat_transpose(real* mat, int m,int n, real* out)
   /* Transpose m by n array of reals a into n by m array of reals out.
    */
   int i, j;
-  
   for (i = 0; i < m; i++) {
     for (j = 0; j < n; j++) {
       out[(j * n) + i] = mat[(i * m) + j];
@@ -175,10 +176,12 @@ int gmx_isdcmds(int argc,char *argv[])
   static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
   static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bANGDIH2G=FALSE;
   static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE;
+  static int nt          = -1;
   static real setmax     = -1.0;
   static real rcutoff    =  1.1;
   static real noisefloor =  0.0;
   static gmx_bool bNoise = FALSE;
+  static gmx_bool bMP    = FALSE;
   t_pargs pa[] = {
     { "-ang", FALSE, etBOOL, {&bANG},
     "ISDM: Mean cosine of difference of backbone angles for each "
@@ -254,6 +257,10 @@ int gmx_isdcmds(int argc,char *argv[])
     "Liu W, Srivastava A, Zhang J (2011) A Mathematical Framework "
     "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
     "e1001075.\n\nAssume only CA atoms." },
+    { "-mp", FALSE, etBOOL, {&bMP},
+      "Use OpenMP commands for parallel processing. "},
+    { "-nt", FALSE, etINT, {&nt},
+      "Limit the maximum number of threads for parallel processing. "},
     { "-noise", FALSE, etBOOL, {&bNoise},
     "If this flag is set, additional information is sent to "
     "stdout. The tool calculates the number of positive eigenvalues "
@@ -283,17 +290,16 @@ int gmx_isdcmds(int argc,char *argv[])
   t_trxstatus *status;
   t_topology top;
   int        ePBC;
-  rvec       *x, *iframe, *jframe, *rframe, *cframe, rrot_xyz, xold;
-  rvec       **frames;
+  rvec       *x, **frames;
   real       *nweights, *iweights, abscoor, maxcoor;
-  real       *diff, ISD, **ISDmat, *P2, *J, *P2J, *B, *BT, *E, *V, *MDSa;
+  real       *diff, **ISDmat, *P2, *J, *P2J, *B, *BT, *E, *V, *MDSa;
   real       **Va, **MDS, **EISD, *EISDm, Rcc, sumne, cumpe;
-  double     dISD, *avgdiff, avgISD, maxISD;
-  matrix     box, rrot, rrotx, rroty, rrotz;
+  double     *avgdiff, *maxdiff, avgISD, maxISD;
+  matrix     box;
   real       t, xpm_max, pi = 3.14159265358979;
   int        *maxframe, *rnum, maxcoori;
-  int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes;
-  int        percentcalcs, noptions;
+  int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes, nframes2;
+  int        percent_calcs, finished_calcs, noptions;
   gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy, bM;
   char       buf[256];
   char       *ISDM, *grpname, title[256], title2[256], *rname;
@@ -326,6 +332,21 @@ int gmx_isdcmds(int argc,char *argv[])
   parse_common_args(&argc,argv,PCA_CAN_TIME | PCA_CAN_VIEW | PCA_BE_NICE,
                     NFILE,fnm,npargs,pa,asize(desc),desc,0,NULL,&oenv);
   
+  // If there are no options at command line, do default behavior.
+  bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
+  bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
+  bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
+  bANGDIH2 || bPHIPSI2 || bANGDIH2G);
+  
+  bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
+  
+#ifdef _OPENMP
+  if (nt > 0)
+  {
+    omp_set_num_threads(nt);
+  }
+#endif
+  
   /* Reads the tpr file. Outputs a ton of info.
    * 
    * I think this is the line that forces you to have a -s at prompt.
@@ -334,15 +355,6 @@ int gmx_isdcmds(int argc,char *argv[])
   
   // Asks you to choose a selection of atoms at prompt.
   get_index(&top.atoms, ftp2fn_null(efNDX, NFILE, fnm), 1, &iatoms, &index, &grpname);
-  
-  
-  // If there are no options at command line, do default behavior.
-  bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
-  bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
-  bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
-  bANGDIH2 || bPHIPSI2 || bANGDIH2G);
-  
-  bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
   
   // For error checking.
   noptions = 0;
@@ -494,10 +506,6 @@ int gmx_isdcmds(int argc,char *argv[])
     
     // Additional stuff for option.
     srand(time(NULL));
-    // Use up the first few random numbers that usually aren't random.
-    rrot_xyz[0] = (real)rand();
-    rrot_xyz[1] = (real)rand();
-    rrot_xyz[2] = (real)rand();
   }
   
   if (bMAMMOTH)
@@ -636,14 +644,6 @@ int gmx_isdcmds(int argc,char *argv[])
   natoms=read_first_x(oenv, &status, ftp2fn(efTRX, NFILE, fnm), &t, &x, box);
   
   // Now that we have iatoms, allocate memory for other arrays.
-  if (bRROT)
-  {
-    snew(iframe,iatoms);
-  }
-  if (bFit)
-  {
-    snew(jframe,iatoms);
-  }
   snew(nweights, natoms);
   snew(iweights, iatoms);
   snew(diff, iatoms);
@@ -696,6 +696,7 @@ int gmx_isdcmds(int argc,char *argv[])
   // Create an array to hold all frames.
   snew(frames,  nframes);
   // Create arrays based on nframes.
+  snew(maxdiff, nframes);
   snew(avgdiff, nframes);
   snew(ISDmat,  nframes);
   for (i = 0; i < nframes; i++)
@@ -703,6 +704,7 @@ int gmx_isdcmds(int argc,char *argv[])
     avgdiff[i] = 0;
     snew(ISDmat[i], nframes);
   }
+  nframes2 = nframes * nframes;
   
   /* Opens trj. Reads first frame. Returns status. Allocates mem for x.
    * 
@@ -751,11 +753,31 @@ int gmx_isdcmds(int argc,char *argv[])
    * impractical to make sure that each ISDM was symmetrical, so now the
    * algorithm takes the performance hit in favor of accuracy and simplicity.
    */
-  percentcalcs = 1;
+  percent_calcs  = 1;
+  finished_calcs = 0;
   
   // Loop through reference frames.
+  #pragma omp parallel for schedule(dynamic) if (bMP)
   for (i = 0; i < nframes; i++)
   {
+    // Some memory required by each thread.
+    real   ISD;
+    double dISD;
+    matrix rrot, rrotx, rroty, rrotz;
+    rvec *iframe, *jframe, *cframe, *rframe, rrot_xyz, xold;
+    if (bRROT)
+    {
+      snew(iframe,iatoms);
+      // Use up the first few random numbers that usually aren't random.
+      rrot_xyz[0] = (real)rand();
+      rrot_xyz[1] = (real)rand();
+      rrot_xyz[2] = (real)rand();
+    }
+    if (bFit)
+    {
+      snew(jframe,iatoms);
+    }
+    
     // Loop through fitting frames.
     for (j = 0; j < nframes; j++)
     {
@@ -897,9 +919,9 @@ int gmx_isdcmds(int argc,char *argv[])
       // Add difference to the difference matrix.
       ISDmat[i][j] = ISD;
       // Update the max and avg difference for scaling.
-      if (dISD > maxISD)
+      if (dISD > maxdiff[i])
       {
-        maxISD = dISD;
+        maxdiff[i] = dISD;
       }
       avgdiff[i] += dISD;
       
@@ -910,14 +932,27 @@ int gmx_isdcmds(int argc,char *argv[])
     // Average difference for each frame.
     avgdiff[i] /= (nframes - 1);
     
-    // Update progress output.
-    while ((double)(i+1)/nframes >= (double)percentcalcs/100)
+    // Update progress output. OpenMP critical section.
+    #pragma omp critical
     {
-      fprintf(stderr, "Approximately %i percent complete. \r", percentcalcs);
-      fflush(stderr);
-      percentcalcs++;
+      finished_calcs += nframes;
+      while ((double)(finished_calcs) / nframes2 >= (double)percent_calcs / 100)
+      {
+        fprintf(stderr, "Approximately %i percent complete. \r", percent_calcs);
+        percent_calcs++;
+      }
+    } // End of OpenMP critical section.
+    
+    // Free memory used in parallel section.
+    if (bRROT)
+    {
+      sfree(iframe);
     }
-  }
+    if (bFit)
+    {
+      sfree(jframe);
+    }
+  } // End of OpenMP parallel for loop.
   fprintf(stderr, "\n\n\n");
   
   // Find the final average of differences.
@@ -1008,10 +1043,10 @@ int gmx_isdcmds(int argc,char *argv[])
     }
   }
   // Solve for B.
-  mat_mult_mat(P2,   J, nframes, nframes, nframes, P2J);
+  mat_mult_mat(P2,   J, nframes, nframes, nframes, P2J, bMP);
   B = P2; // Finished with the memory in P2. Reuse it to store B.
   scl_mult_mat(-0.5, J, nframes, nframes, J);
-  mat_mult_mat(J,  P2J, nframes, nframes, nframes, B);
+  mat_mult_mat(J,  P2J, nframes, nframes, nframes, B, bMP);
   
   // Step 3.
   fprintf(stderr, "MDS step 3 of 5. \r");
@@ -1344,7 +1379,7 @@ int gmx_isdcmds(int argc,char *argv[])
     fprintf(out, "%% 'Radius'   : Sphere size (numeric).\n");
     fprintf(out, "%% 'Res'      : Sphere resolution (numeric).\n");
     fprintf(out, "%% 'Title'    : Figure title (char).\n");
-    fprintf(out, "%% 'GIFLine'  : Create animated GIF (char).\n");
+    fprintf(out, "%% 'GIFName'  : Create animated GIF (char).\n");
     fprintf(out, "%% 'GIFStep'  : Frames per image (numeric).\n");
     fprintf(out, "%% 'ShowLine' : Connect spheres (logical).\n");
     fprintf(out, "%%\n%% Defaults   : \n");
@@ -1394,6 +1429,10 @@ int gmx_isdcmds(int argc,char *argv[])
       }
     }
     fprintf(out, "];\n\n");
+    
+    // Accuracy of MDS.
+    fprintf(out, "%% Print correlation coefficient of MDS and ISD.\n");
+    fprintf(out, "fprintf('The accuracy of MDS is: %%8.4f', %8.4f)\n", Rcc);
     
     // Set bead radius. Calculate box center and range.
     fprintf(out, "%% Calculate plot limits.\n");
@@ -1537,7 +1576,7 @@ int gmx_isdcmds(int argc,char *argv[])
      */
     printf("\nCalculating Rg matrix. \n");
     
-    percentcalcs = 1;
+    percent_calcs = 1;
     
     // Loop through reference frames.
     for (i = 0; i < nframes; i++)
@@ -1559,12 +1598,11 @@ int gmx_isdcmds(int argc,char *argv[])
       }
       
       // Update progress output.
-      while ((double)(i+1)/nframes >= (double)percentcalcs/100)
+      while ((double)(i+1)/nframes >= (double)percent_calcs/100)
       {
         fprintf(stderr, "Approximately %i percent complete. \r", 
-                percentcalcs);
-        fflush(stderr);
-        percentcalcs++;
+                percent_calcs);
+        percent_calcs++;
       }
     }
     
@@ -1591,7 +1629,7 @@ int gmx_isdcmds(int argc,char *argv[])
      */
     printf("\nCalculating Rg difference matrix. \n");
     
-    percentcalcs = 1;
+    percent_calcs = 1;
     
     // Loop through reference frames.
     for (i = 0; i < nframes; i++)
@@ -1613,12 +1651,12 @@ int gmx_isdcmds(int argc,char *argv[])
       }
       
       // Update progress output.
-      while ((double)(i+1)/nframes >= (double)percentcalcs/100)
+      while ((double)(i+1)/nframes >= (double)percent_calcs/100)
       {
         fprintf(stderr, "Approximately %i percent complete. \r", 
-                percentcalcs);
+                percent_calcs);
         fflush(stderr);
-        percentcalcs++;
+        percent_calcs++;
       }
     }
     
