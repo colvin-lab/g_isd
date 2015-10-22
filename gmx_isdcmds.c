@@ -41,7 +41,10 @@ void mat_mult_mat(real* mat1, real* mat2, int m, int n, int o, real* out, gmx_bo
    * Assume b is an array of doubles n by o in dimensions.
    * Out should point to enough memory to store m by o doubles.
    */
-  int i;
+  int i, percent_calcs, finished_calcs;
+  percent_calcs  = 1;
+  finished_calcs = 0;
+
   #pragma omp parallel for schedule(dynamic) if (bMP)
   for (i = 0; i < m; i++) {
     int j, k;
@@ -51,7 +54,18 @@ void mat_mult_mat(real* mat1, real* mat2, int m, int n, int o, real* out, gmx_bo
         out[(i * m) + k] += mat1[(i * m) + j] * mat2[(j * n) + k];
       }
     }
-  }
+    // Output progress. OpenMP critical section.
+    #pragma omp critical
+    {
+      finished_calcs++;
+      while ((double)(finished_calcs) / m >= (double)percent_calcs / 100)
+      {
+        fprintf(stderr, "Approximately %i percent complete. \r", percent_calcs);
+        percent_calcs++;
+      }
+    } // End of OpenMP critical section.
+  } // End of OpenMP parallel for loop.
+  fprintf(stderr, "\n");
 }
 
 
@@ -298,7 +312,7 @@ int gmx_isdcmds(int argc,char *argv[])
   matrix     box;
   real       t, xpm_max, pi = 3.14159265358979;
   int        *maxframe, *rnum, maxcoori;
-  int        i, j, k, m, n, p, np, d, iatoms, natoms, nframes, nframes2;
+  int        i, k, m, n, p, np, d, iatoms, natoms, nframes, nframes2;
   int        percent_calcs, finished_calcs, noptions;
   gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy, bM;
   char       buf[256];
@@ -701,7 +715,8 @@ int gmx_isdcmds(int argc,char *argv[])
   snew(ISDmat,  nframes);
   for (i = 0; i < nframes; i++)
   {
-    avgdiff[i] = 0;
+    maxdiff[i] = 0.0;
+    avgdiff[i] = 0.0;
     snew(ISDmat[i], nframes);
   }
   nframes2 = nframes * nframes;
@@ -726,9 +741,9 @@ int gmx_isdcmds(int argc,char *argv[])
     // Centers x. The NULL arguments are necessary to fit based on subset.
     reset_x(natoms, NULL, natoms, NULL, x, nweights);
     // Saves the current frame into frames.
-    for (j=0; j<iatoms; j++)
+    for (n=0; n<iatoms; n++)
     {
-      copy_rvec(x[(int)index[j]], frames[i][j]);
+      copy_rvec(x[(int)index[n]], frames[i][n]);
     }
     // Increment frame index.
     i++;
@@ -761,6 +776,7 @@ int gmx_isdcmds(int argc,char *argv[])
   for (i = 0; i < nframes; i++)
   {
     // Some memory required by each thread.
+    int j;
     real   ISD;
     double dISD;
     matrix rrot, rrotx, rroty, rrotz;
@@ -963,6 +979,7 @@ int gmx_isdcmds(int argc,char *argv[])
   avgISD /= nframes;
   
   
+  int j;
   if (bISD)
   {
     // Opens the output file.
@@ -1016,7 +1033,7 @@ int gmx_isdcmds(int argc,char *argv[])
   }
   
   // Step 1.
-  fprintf(stderr, "MDS step 1 of 5. \r");
+  fprintf(stderr, "MDS step 1 of 5. \n");
   for (i = 0; i < nframes; i++)
   {
     for (j = 0; j < nframes; j++)
@@ -1026,7 +1043,7 @@ int gmx_isdcmds(int argc,char *argv[])
   }
   
   // Step 2.
-  fprintf(stderr, "MDS step 2 of 5. \r");
+  fprintf(stderr, "MDS step 2 of 5. \n");
   // Constructs J.
   for (i = 0; i < nframes; i++)
   {
@@ -1049,7 +1066,7 @@ int gmx_isdcmds(int argc,char *argv[])
   mat_mult_mat(J,  P2J, nframes, nframes, nframes, B, bMP);
   
   // Step 3.
-  fprintf(stderr, "MDS step 3 of 5. \r");
+  fprintf(stderr, "MDS step 3 of 5. \n");
   // Fix assymetry in B caused by precision limits.
   BT = J; // Finished with the memory in J. Reuse it to store BT.
   mat_transpose(B, nframes, nframes, BT);
@@ -1066,7 +1083,7 @@ int gmx_isdcmds(int argc,char *argv[])
   eigensolver(B, nframes, 0, nframes, E, V);
   
   // Step 4.
-  fprintf(stderr, "MDS step 4 of 5. \r");
+  fprintf(stderr, "MDS step 4 of 5. \n");
   // Find eigenvalues > 0.0.
   for (i = 0; i < nframes; i++)
   {
@@ -1100,7 +1117,7 @@ int gmx_isdcmds(int argc,char *argv[])
   }
   
   // Step 5.
-  fprintf(stderr, "MDS step 5 of 5. \r");
+  fprintf(stderr, "MDS step 5 of 5. \n");
   for (j = 0; j < np; j++)
   {
     maxcoor = -1.0;
