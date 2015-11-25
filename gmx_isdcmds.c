@@ -1388,46 +1388,72 @@ int gmx_isdcmds(int argc,char *argv[])
     out = opt2FILE("-m", NFILE, fnm, "w");
     
     // Octave function and comments.
-    fprintf(out, "function disp6D(varargin)\n");
-    fprintf(out, "%% function disp6D(varargin)\n");
-    fprintf(out, "%%\n");
-    fprintf(out, "%% 'PauseTime': Pause between frames (numeric).\n");
-    fprintf(out, "%% 'TimeStep' : Time per frame (numeric).\n");
-    fprintf(out, "%% 'Radius'   : Sphere size (numeric).\n");
-    fprintf(out, "%% 'Res'      : Sphere resolution (numeric).\n");
-    fprintf(out, "%% 'Title'    : Figure title (char).\n");
-    fprintf(out, "%% 'GIFName'  : Create animated GIF (char).\n");
-    fprintf(out, "%% 'GIFStep'  : Frames per image (numeric).\n");
-    fprintf(out, "%% 'ShowLine' : Connect spheres (logical).\n");
-    fprintf(out, "%%\n%% Defaults   : \n");
-    fprintf(out, "%% No pause, 1.0 ps time step, radius auto, sphere \n");
-    fprintf(out, "%% resolution 6, no title, no GIF, 1.0 frame GIF step, \n");
-    fprintf(out, "%% no line.\n");
-    fprintf(out, "%%\n%% Plots MDS output in 6 dimensions:\n");
-    fprintf(out, "%% x, y, z, r, g, b\n\n");
+    fprintf(out, 
+            "function [MDSout, MDS] = disp6D(varargin)\n"
+            "%% function [MDSout, MDS] = disp6D(varargin)\n"
+            "%%\n"
+            "%% 'Delay'    : Pause between frames (numeric, units = ps).\n"
+            "%%              Setting Delay creates a movie-like output.\n"
+            "%% 'TimeStep' : Time per frame (numeric, units = ps).\n"
+            "%% 'NSims'    : Display N simulations independently (numeric).\n"
+            "%% 'NAvg'     : Runs an averaging window of size 2 * NAvg + 1.\n"
+            "%% 'Radius'   : Sphere size (numeric).\n"
+            "%% 'Res'      : Sphere resolution (numeric).\n"
+            "%% 'NSkip'    : Only display every NSkip + 1 sphere (numeric).\n"
+            "%% 'Title'    : Figure title (char).\n"
+            "%% 'GIFName'  : Create animated GIF (char).\n"
+            "%% 'GIFStep'  : Frames per image (numeric).\n"
+            "%% 'ShowLine' : Connect spheres (logical).\n"
+            "%% 'Vis3D'    : Better but causes error in Octave (logical).\n"
+            "%%\n"
+            "%% Defaults   : \n"
+            "%% No delay, 1.0 ps time step, one simulation, no averaging \n"
+            "%% window, radius auto, sphere resolution 6, no skipping, no \n"
+            "%% title, no GIF, 1.0 frame GIF step, no line, no Vis3D.\n"
+            "%%\n"
+            "%% Plots MDS output in 6 dimensions:\n"
+            "%% x, y, z, r, g, b\n"
+            "\n"
+           );
     
     // Defaults.
-    fprintf(out, "%% Set defaults.\n");
-    fprintf(out, "defPauseTime = -1.0;\n");
-    fprintf(out, "defTimeStep  = -1.0;\n");
-    fprintf(out, "defRadius    = -1.0;\n");
-    fprintf(out, "defRes       = -1.0;\n");
-    fprintf(out, "defTitle     = '';\n");
-    fprintf(out, "defGIFName   = '';\n");
-    fprintf(out, "defGIFStep   = -1.0;\n");
-    fprintf(out, "defShowLine  = false;\n\n");
-    fprintf(out, "%% Initialize parser.\n");
-    fprintf(out, "p = inputParser;\n");
-    fprintf(out, "addOptional(p, 'PauseTime', defPauseTime, @isnumeric);\n");
-    fprintf(out, "addOptional(p, 'TimeStep',  defTimeStep,  @isnumeric);\n");
-    fprintf(out, "addOptional(p, 'Radius',    defRadius,    @isnumeric);\n");
-    fprintf(out, "addOptional(p, 'Res',       defRes,       @isnumeric);\n");
-    fprintf(out, "addOptional(p, 'Title',     defTitle,     @ischar);\n");
-    fprintf(out, "addOptional(p, 'GIFName',   defGIFName,   @ischar);\n");
-    fprintf(out, "addOptional(p, 'GIFStep',   defGIFStep,   @isnumeric);\n");
-    fprintf(out, "addOptional(p, 'ShowLine',  defShowLine);\n\n");
-    fprintf(out, "parse(p, varargin{:});\n\n");
-    fprintf(out, "fnm = p.Results.GIFName;");
+    fprintf(out, 
+            "%% Set defaults.\n"
+            "defDelay     = -1.0;\n"
+            "defTimeStep  = -1.0;\n"
+            "defNSims     = -1.0;\n"
+            "defAvgWin    = -1.0;\n"
+            "defRadius    = -1.0;\n"
+            "defRes       = -1.0;\n"
+            "defNSkip     = -1.0;\n"
+            "defTitle     = '';\n"
+            "defGIFName   = '';\n"
+            "defGIFStep   = -1.0;\n"
+            "defShowLine  = false;\n"
+            "defVis3D     = false;\n"
+            "\n"
+           );
+    
+    fprintf(out, 
+            "%% Initialize parser.\n"
+            "p = inputParser;\n"
+            "addOptional(p, 'Delay',     defDelay,     @isnumeric);\n"
+            "addOptional(p, 'TimeStep',  defTimeStep,  @isnumeric);\n"
+            "addOptional(p, 'NSims',     defNSims,     @isnumeric);\n"
+            "addOptional(p, 'AvgWin',    defAvgWin,    @isnumeric);\n"
+            "addOptional(p, 'Radius',    defRadius,    @isnumeric);\n"
+            "addOptional(p, 'Res',       defRes,       @isnumeric);\n"
+            "addOptional(p, 'NSkip',     defNSkip,     @isnumeric);\n"
+            "addOptional(p, 'Title',     defTitle,     @ischar);\n"
+            "addOptional(p, 'GIFName',   defGIFName,   @ischar);\n"
+            "addOptional(p, 'GIFStep',   defGIFStep,   @isnumeric);\n"
+            "addOptional(p, 'ShowLine',  defShowLine);\n"
+            "addOptional(p, 'Vis3D',     defVis3D);\n"
+            "\n"
+            "parse(p, varargin{:});\n"
+            "fnm = p.Results.GIFName;\n"
+            "\n"
+           );
     
     
     // Save data to matrix.
@@ -1449,79 +1475,178 @@ int gmx_isdcmds(int argc,char *argv[])
     
     // Accuracy of MDS.
     fprintf(out, "%% Print correlation coefficient of MDS and ISD.\n");
-    fprintf(out, "fprintf('The accuracy of MDS is: %%8.4f', %8.4f)\n", Rcc);
+    fprintf(out, "fprintf('The accuracy of MDS is: %%8.4f', %8.4f)\n\n", Rcc);
+    
+    // Apply settings for NAvg, NSkip, and NSims.
+    fprintf(out, 
+            "%% Apply settings for NAvg, NSkip, and NSims.\n"
+            "NSims = p.Results.NSims;\n"
+            "NSkip = p.Results.NSkip;\n"
+            "NAvg  = p.Results.NAvg;\n"
+            "if (rem(NSims, 1) ~= 0)\n"
+            "  error('NSims should have a positive integer value.')\n"
+            "end\n"
+            "\n"
+            "if (rem(NSkip, 1) ~= 0)\n"
+            "  error('NSkip should have a positive integer value.')\n"
+            "end\n"
+            "\n"
+            "if (rem(NAvg,  1) ~= 0)\n"
+            "  error('NAvg  should have a positive integer value.')\n"
+            "end\n"
+            "\n"
+           );
+    
+    fprintf(out,
+            "%% Rearrange MDS matrix by simulation.\n"
+            "if (NSims < 1)\n"
+            "  NSims  = 1;\n"
+            "  MDSmat = MDS;\n"
+            "else\n"
+            "  NSims   = fix(NSims);\n"
+            "  nPerSim = fix(n / NSims);\n"
+            "  MDSmat  = zeros(nPerSim, 6, NSims);\n"
+            "  for i = 1:NSims\n"
+            "    i1 = (i - 1) * nPerSim + 1;\n"
+            "    i2 = i * nPerSim;\n"
+            "    MDSmat(:, :, i) = MDS(i1:i2, :);\n"
+            "  end\n"
+            "end\n"
+           );
+    
+    fprintf(out,
+            "%% Apply averaging filter.\n"
+            "if (NAvg < 1)\n"
+            "  MDSout = MDSmat;\n"
+            "else\n"
+            "  NAvg = fix(NAvg);\n"
+            "  for (i = 1:NSims)\n"
+            "    for (j = 1:NPerSim)\n"
+            "      j1 = j - NAvg;\n"
+            "      if (j1 < 1)\n"
+            "        j1 = 1;\n"
+            "      end\n"
+            "      j2 = j + NAvg;\n"
+            "      if (j2 > NPerSim)\n"
+            "        j2 = NPerSim;\n"
+            "      end\n"
+            "      for (k = 1:6)\n"
+            "        MDSijk = mean(MDSmat(j1:j2, k, i));\n"
+            "        MDSout(j, k, i) = MDSijk;\n"
+            "      end\n"
+            "    end\n"
+            "  end\n"
+            "end\n"
+           );
     
     // Set bead radius. Calculate box center and range.
-    fprintf(out, "%% Calculate plot limits.\n");
-    fprintf(out, "bsize = max(max(MDS)) - min(min(MDS));\n");
-    fprintf(out, "if (p.Results.Radius < 0.0)\n  R = 0.01 * bsize;\n");
-    fprintf(out, "else\n  R = p.Results.Radius;\nend\n");
-    fprintf(out, "bctr  = mean(MDS);\n");
-    fprintf(out, "bmin  = min(min(MDS)) - R;\n");
-    fprintf(out, "bmax  = max(max(MDS)) + R;\n\n");
+    fprintf(out, 
+            "%% Calculate plot limits.\n"
+            "bsize = max(max(MDSout)) - min(min(MDSout));\n"
+            "if (p.Results.Radius < 0.0)\n"
+            "  R = 0.01 * bsize;\n"
+            "else\n"
+            "  R = p.Results.Radius;\n"
+            "end\n"
+            "bctr  = mean(MDSout);\n"
+            "bmin  = min(min(MDSout)) - R;\n"
+            "bmax  = max(max(MDSout)) + R;\n"
+            "\n"
+           );
     
     // Split MDS by dimensions. Recenter and rescale rgb dimensions.
-    fprintf(out, "%% Split MDS by dimensions. Recenter to 0.5.\n");
-    fprintf(out, "x = MDS(:,1);\n");
-    fprintf(out, "y = MDS(:,2);\n");
-    fprintf(out, "z = MDS(:,3);\n");
-    fprintf(out, "r = MDS(:,4);\n");
-    fprintf(out, "g = MDS(:,5);\n");
-    fprintf(out, "b = MDS(:,6);\n\n");
-    fprintf(out, "%% Rescale colors.\n");
-    fprintf(out, "color_sf = 0.8 / bsize;\n");
-    fprintf(out, "r = (r - bctr(4)) * color_sf + 0.5;\n");
-    fprintf(out, "g = (g - bctr(5)) * color_sf + 0.5;\n");
-    fprintf(out, "b = (b - bctr(6)) * color_sf + 0.5;\n\n");
+    fprintf(out, 
+            "%% Split MDS by dimensions. Recenter rgb to 0.5.\n"
+            "x = MDSout(:,1);\n"
+            "y = MDSout(:,2);\n"
+            "z = MDSout(:,3);\n"
+            "r = MDSout(:,4);\n"
+            "g = MDSout(:,5);\n"
+            "b = MDSout(:,6);\n"
+            "\n"
+            "%% Rescale colors.\n"
+            "color_sf = 0.8 / bsize;\n"
+            "r = (r - bctr(4)) * color_sf + 0.5;\n"
+            "g = (g - bctr(5)) * color_sf + 0.5;\n"
+            "b = (b - bctr(6)) * color_sf + 0.5;\n"
+            "\n"
+           );
     
     // Setup main figure.
     fprintf(out, "%% Setup figure.\n");
     fprintf(out, "n = %6i;\n", nframes);
-    fprintf(out, "if (p.Results.Res < 0.0)\n  Res = 6;\nelse\n  ");
-    fprintf(out, "Res = p.Results.Res;\nend\n");
-    fprintf(out, "[Sx, Sy, Sz] = sphere(Res);\n");
-    fprintf(out, "Sx = R * Sx; Sy = R * Sy; Sz = R * Sz;\n");
-    fprintf(out, "figure;\n");
-    fprintf(out, "axis([bmin, bmax, bmin, bmax, bmin, bmax]);\n\n");
-    fprintf(out, "%% The following line can be commented in Matlab.\n");
-    fprintf(out, "axis('equal');\n");
-    fprintf(out, "%% Uncomment the following line in Matlab.\n");
-    fprintf(out, "%%axis('vis3d');\n\n");
+    fprintf(out, 
+            "if (p.Results.Res < 0.0)\n"
+            "  Res = 6;\n"
+            "else\n"
+            "  Res = p.Results.Res;\n"
+            "end\n"
+            "[Sx, Sy, Sz] = sphere(Res);\n"
+            "Sx = R * Sx; Sy = R * Sy; Sz = R * Sz;\n"
+            "figure;\n"
+            "axis([bmin, bmax, bmin, bmax, bmin, bmax]);\n"
+            "\n"
+            "%% Choose axis display style.\n"
+            "if (p.Results.Vis3D)\n"
+            "  axis('vis3d');\n"
+            "else\n"
+            "  axis('equal');\n"
+            "end\n"
+            "\n"
+           );
     
     // Display coordinates.
-    fprintf(out, "%% Display 6D coordinates.\n");
-    fprintf(out, "hold on;\n");
-    fprintf(out, "for i = 1:n\n  ");
-    fprintf(out, "c = [r(i), g(i), b(i)];\n  ");
-    fprintf(out, "h = surf(Sx + x(i), Sy + y(i), Sz + z(i));\n  ");
-    fprintf(out, "set(h, 'FaceColor', c, 'EdgeColor', 'none');\n\n  ");
+    fprintf(out, "%% Display 6D coordinates.\n"
+            "hold on;\n"
+            "if (NSkip < 1)\n"
+            "  NSkip = 1;\n"
+            "else\n"
+            "  NSkip = fix(NSkip);\n"
+            "end\n"
+            "for i = 1:n\n"
+            "  if (mod(i, NSkip) == 0)\n"
+            "    c = [r(i), g(i), b(i)];\n"
+            "    h = surf(Sx + x(i), Sy + y(i), Sz + z(i));\n"
+            "    set(h, 'FaceColor', c, 'EdgeColor', 'none');\n"
+            "    \n"
+           );
     
     // Figure and file options.
-    fprintf(out, "if (p.Results.PauseTime > 0.0)\n    ");
-    fprintf(out, "pause(p.Results.PauseTime);\n  end\n  ");
-    fprintf(out, "if (p.Results.TimeStep > 0.0)\n    ");
-    fprintf(out, "iTime  = num2str(i * p.Results.TimeStep);\n    ");
-    fprintf(out, "iTime  = strcat(iTime,' ns');\n  ");
-    fprintf(out, "else\n    ");
-    fprintf(out, "iTime  = '';\n  end\n  ");
-    fprintf(out, "iTitle = strcat(p.Results.Title,' ',iTime);\n  ");
-    fprintf(out, "title(iTitle);\n\n  ");
-    fprintf(out, "if (~strcmp(fnm,''))\n    ");
-    fprintf(out, "if (i == 1)\n      ");
-    fprintf(out, "f  = getframe(gcf);\n      ");
-    fprintf(out, "im = frame2im(f);\n      ");
-    fprintf(out, "[imind,cm] = rgb2ind(im,256);\n      ");
-    fprintf(out, "imwrite(imind,cm,fnm,'gif','Loopcount',inf);\n      ");
-    fprintf(out, "n  = 0;\n      continue\n    end\n    ");
-    fprintf(out, "n  = n + 1;\n    ");
-    fprintf(out, "if (n >= p.Results.GIFStep)\n      ");
-    fprintf(out, "n  = 0;\n      ");
-    fprintf(out, "f  = getframe(gcf);\n      ");
-    fprintf(out, "im = frame2im(f);\n      ");
-    fprintf(out, "[imind,cm] = rgb2ind(im,256);\n      ");
-    fprintf(out, "imwrite(imind,cm,fnm,'gif','WriteMode','append');\n    ");
-    fprintf(out, "end\n  end\n");
-    fprintf(out, "end\n\n");
+    fprintf(out, 
+            "    if (p.Results.Delay > 0.0)\n"
+            "      pause(p.Results.Delay);\n"
+            "    end\n"
+            "    if (p.Results.TimeStep > 0.0)\n"
+            "      iTime  = num2str(i * p.Results.TimeStep);\n"
+            "      iTime  = strcat(iTime,' ns');\n"
+            "    else\n"
+            "      iTime  = '';\n"
+            "    end\n"
+            "    iTitle = strcat(p.Results.Title,' ',iTime);\n"
+            "    title(iTitle);\n"
+            "    \n"
+            "    if (~strcmp(fnm,''))\n"
+            "      if (i == 1)\n"
+            "        n  = 0;\n"
+            "        f  = getframe(gcf);\n"
+            "        im = frame2im(f);\n"
+            "        [imind,cm] = rgb2ind(im,256);\n"
+            "        imwrite(imind,cm,fnm,'gif','Loopcount',inf);\n"
+            "        continue\n"
+            "      end\n"
+            "      n = n + 1;\n"
+            "      if (n >= p.Results.GIFStep)\n"
+            "        n  = 0;\n"
+            "        f  = getframe(gcf);\n"
+            "        im = frame2im(f);\n"
+            "        [imind,cm] = rgb2ind(im,256);\n"
+            "        imwrite(imind,cm,fnm,'gif','WriteMode','append');\n"
+            "      end\n"
+            "    end\n"
+            "  end\n"
+            "end\n"
+            "\n"
+           );
     
     // Line option.
     fprintf(out, "%% Optionally draw a line to show the time component.\n");
