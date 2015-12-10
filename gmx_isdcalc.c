@@ -732,8 +732,8 @@ int gmx_isdcalc(int argc,char *argv[])
         }
         if ((user_td >= nframes) || (user_td < 1))
         {
-            gmx_fatal(FARGS,"\nValue of -td must be between 1 and (nframes - 1). "
-            "\n");
+            gmx_fatal(FARGS,"\nValue of -td must be between 1 and "
+                            "(nframes - 1). \n");
         }
     }
     // Check for errors for the -tdsens option before calculations begin.

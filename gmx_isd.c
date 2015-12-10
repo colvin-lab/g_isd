@@ -172,14 +172,10 @@ real calc_rcc(real** ISD, real** EISD, int nframes)
 
 
 
-int gmx_isdcmds(int argc,char *argv[])
+int gmx_isd(int argc,char *argv[])
 {
   const char *desc[] = {
-    "[TT]g_isdcmds[tt] implements classical multi-dimensional scaling ",
-    "by first calculating the matrix of inter-structure distances (ISD). ",
-    "The default ISDM if one is not, chosen by the user is RMSD. Only ",
-    "one ISDM can be chosen at a time. The -xpm option is required. An ",
-    "upper threshold for the ISD can be specified with the setmax option."
+    "[TT]g_isd[tt]."
   };
   
   
@@ -190,6 +186,7 @@ int gmx_isdcmds(int argc,char *argv[])
   static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
   static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bANGDIH2G=FALSE;
   static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE;
+  static user_bf = -1, user_ef = -1, user_td = -1;
   static int nt          = -1;
   static real setmax     = -1.0;
   static real rcutoff    =  1.1;
@@ -272,9 +269,21 @@ int gmx_isdcmds(int argc,char *argv[])
     "for Protein Structure Comparison. PLoS Comput Biol 7(2): "
     "e1001075.\n\nAssume only CA atoms." },
     { "-mp", FALSE, etBOOL, {&bMP},
-      "Use OpenMP commands for parallel processing. "},
+    "Use OpenMP commands for parallel processing. "},
     { "-nt", FALSE, etINT, {&nt},
-      "Limit the maximum number of threads for parallel processing. "},
+    "Limit the maximum number of threads for parallel processing. "},
+    { "-bf", FALSE, etINT, {&user_bf},
+    "Compare range of frames from bf to ef to all other " 
+    "frames. The bf and ef options are applied after the b, " 
+    "e, and dt options and use units of frames instead of units of " 
+    "time. Frame numbers are counted from one."},
+    { "-ef", FALSE, etINT, {&user_ef},
+    "Compare range of frames from bf to ef to all other " 
+    "frames. The bf and ef options are applied after the b, " 
+    "e, and dt options and use units of frames instead of units of " 
+    "time. Frame numbers are counted from one."},
+    { "-td", FALSE, etINT, {&user_td},
+    "Number of frames used for the time difference of -tdo output. " },
     { "-noise", FALSE, etBOOL, {&bNoise},
     "If this flag is set, additional information is sent to "
     "stdout. The tool calculates the number of positive eigenvalues "
@@ -310,11 +319,14 @@ int gmx_isdcmds(int argc,char *argv[])
   real       **Va, **MDS, **EISD, *EISDm, Rcc, sumne, cumpe;
   double     *avgdiff, *maxdiff, avgISD, maxISD;
   matrix     box;
-  real       t, xpm_max, pi = 3.14159265358979;
-  int        *maxframe, *rnum, maxcoori;
-  int        i, k, m, n, p, np, d, iatoms, natoms, nframes, nframes2;
+  real       t, t1, t2, dt, xpm_max, pi = 3.14159265358979;
+  int        *maxframe, *rnum, maxcoori, bf, ef;
+  int        i, k, m, n, p, np, d, iatoms, natoms, nframes, nframes2, nf2;
   int        percent_calcs, finished_calcs, noptions;
-  gmx_bool   bDFLT, bFit, bISD, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy, bM;
+  gmx_bool   bDFLT, bFit, bMDS, bEig, bVec, bRcc, bMRg, bDRg, bPy, bM;
+  gmx_bool   bAvg, bVar, bMax, bPair, bRef, bSens, bSNR, bTD;
+  gmx_bool   bMap, bISD, bISDMat, bDCR, bVDCR, bCalcDCR, bMinDCR, bMaxDCR;
+  gmx_bool   bAvgSCL, bMaxSCL;
   char       buf[256];
   char       *ISDM, *grpname, title[256], title2[256], *rname;
   atom_id    *index;
@@ -323,18 +335,35 @@ int gmx_isdcmds(int argc,char *argv[])
   const char *leg[]  = { "D" }; 
   #define NLEG asize(leg) 
   t_filenm fnm[] = {
-    { efTRX, "-f",   NULL,       ffREAD }, 
-    { efTPS, NULL,   NULL,       ffREAD },
-    { efNDX, NULL,   NULL,       ffOPTRD },
-    { efXVG, "-eig", "eigvals",  ffOPTWR },
-    { efXVG, "-rcc", "corrcoef", ffOPTWR },
-    { efXVG, "-mrg", "mrgcorr",  ffOPTWR },
-    { efXVG, "-drg", "drgcorr",  ffOPTWR },
-    { efDAT, "-vec", "eigvecs",  ffOPTWR },
-    { efDAT, "-isd", "isdcsv",   ffOPTWR },
-    { efDAT, "-mds", "mdscsv",   ffOPTWR },
-    { efDAT, "-py",  "mayapy",   ffOPTWR },
-    { efDAT, "-m",   "disp6D",   ffOPTWR },
+    { efTRX, "-f",      NULL,       ffREAD }, 
+    { efTPS, NULL,      NULL,       ffREAD },
+    { efNDX, NULL,      NULL,       ffOPTRD },
+    // Calc options.
+    { efXVG, "-avg",    "avg",      ffOPTWR },
+    { efXVG, "-var",    "var",      ffOPTWR },
+    { efXVG, "-max",    "max",      ffOPTWR },
+    { efXVG, "-pair",   "pair",     ffOPTWR },
+    { efXVG, "-ref",    "ref",      ffOPTWR },
+    { efXPM, "-map",    "map",      ffOPTWR }, 
+    { efDAT, "-isd",    "isdcsv",   ffOPTWR },
+    { efXVG, "-decorr", "decorr",   ffOPTWR },
+    { efXVG, "-mindcr", "mindcr",   ffOPTWR },
+    { efXVG, "-maxdcr", "maxdcr",   ffOPTWR },
+    { efXVG, "-avgscl", "avgscl",   ffOPTWR },
+    { efXVG, "-maxscl", "maxscl",   ffOPTWR },
+    { efXVG, "-vdcr",   "vdcr",     ffOPTWR },
+    { efXVG, "-snr",    "snr",      ffOPTWR },
+    { efXVG, "-tdo",    "tdo",      ffOPTWR },
+    { efXVG, "-sens",   "sens",     ffOPTWR },
+    // CMDS options.
+    { efXVG, "-eig",    "eigvals",  ffOPTWR },
+    { efXVG, "-rcc",    "corrcoef", ffOPTWR },
+    { efXVG, "-mrg",    "mrgcorr",  ffOPTWR },
+    { efXVG, "-drg",    "drgcorr",  ffOPTWR },
+    { efDAT, "-vec",    "eigvecs",  ffOPTWR },
+    { efDAT, "-mds",    "mdscsv",   ffOPTWR },
+    { efDAT, "-py",     "mayapy",   ffOPTWR },
+    { efDAT, "-m",      "disp6D",   ffOPTWR },
   }; 
   #define NFILE asize(fnm)
   int npargs;
@@ -345,6 +374,34 @@ int gmx_isdcmds(int argc,char *argv[])
   // Lots of black magic with this one. The oenv is used by many things.
   parse_common_args(&argc,argv,PCA_CAN_TIME | PCA_CAN_VIEW | PCA_BE_NICE,
                     NFILE,fnm,npargs,pa,asize(desc),desc,0,NULL,&oenv);
+  
+  // Output which files?
+  // Calc
+  bAvg    = opt2bSet("-avg",    NFILE, fnm);
+  bVar    = opt2bSet("-var",    NFILE, fnm);
+  bMax    = opt2bSet("-max",    NFILE, fnm);
+  bPair   = opt2bSet("-pair",   NFILE, fnm);
+  bRef    = opt2bSet("-ref",    NFILE, fnm);
+  bMap    = opt2bSet("-map",    NFILE, fnm);
+  bISD    = opt2bSet("-isd",    NFILE, fnm);
+  bDCR    = opt2bSet("-decorr", NFILE, fnm);
+  bMinDCR = opt2bSet("-mindcr", NFILE, fnm);
+  bMaxDCR = opt2bSet("-maxdcr", NFILE, fnm);
+  bAvgSCL = opt2bSet("-avgscl", NFILE, fnm);
+  bMaxSCL = opt2bSet("-maxscl", NFILE, fnm);
+  bVDCR   = opt2bSet("-vdcr",   NFILE, fnm);
+  bSNR    = opt2bSet("-snr",    NFILE, fnm);
+  bTD     = opt2bSet("-tdo",    NFILE, fnm);
+  bSens   = opt2bSet("-sens",   NFILE, fnm);
+  // CMDS
+  bEig    = opt2bSet("-eig",    NFILE, fnm);
+  bRcc    = opt2bSet("-rcc",    NFILE, fnm);
+  bMRg    = opt2bSet("-mrg",    NFILE, fnm);
+  bDRg    = opt2bSet("-drg",    NFILE, fnm);
+  bVec    = opt2bSet("-vec",    NFILE, fnm);
+  bMDS    = opt2bSet("-mds",    NFILE, fnm);
+  bPy     = opt2bSet("-py",     NFILE, fnm);
+  bM      = opt2bSet("-m",      NFILE, fnm);
   
   // If there are no options at command line, do default behavior.
   bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
@@ -677,24 +734,16 @@ int gmx_isdcmds(int argc,char *argv[])
     diff[i] = 0;
   }
   
-  // Output which files?
-  bEig = opt2bSet("-eig", NFILE, fnm);
-  bRcc = opt2bSet("-rcc", NFILE, fnm);
-  bMRg = opt2bSet("-mrg", NFILE, fnm);
-  bDRg = opt2bSet("-drg", NFILE, fnm);
-  bVec = opt2bSet("-vec", NFILE, fnm);
-  bISD = opt2bSet("-isd", NFILE, fnm);
-  bMDS = opt2bSet("-mds", NFILE, fnm);
-  bPy  = opt2bSet("-py",  NFILE, fnm);
-  bM   = opt2bSet("-m",   NFILE, fnm);
   
-  nframes = 0;
+  nframes = 0; t2 = 0;
   do
   {
     /* This loop doesn't do anything.
      * 
      * It's just the most reliable way to find the number of frames.
      */
+    t1 = t2;
+    t2 = t;
     nframes++;
   } while(read_next_x(oenv, status, &t, natoms, x, box));
   // Close the trajectory.
@@ -704,7 +753,61 @@ int gmx_isdcmds(int argc,char *argv[])
   {
     gmx_fatal(FARGS, "\nThe trajectory must have at least 2 frames.\n");
   }
+  if (bVar)
+  {
+    if (nframes < 3)
+    {
+      gmx_fatal(FARGS, "\nCalculating variance requires at least 3 "
+                       "frames.\n");
+    }
+  }
+  // Find trajectory time steps. Assumes even spacing. Find nframes / 2.
+  dt  = t2 - t1;
+  nf2 = nframes / 2;
   
+  
+  // Reference frames to calculate based on.
+  if (user_bf > nframes)
+  {
+    gmx_fatal(FARGS,"\nArgument to -bf must be between 1 and last frame.\n");
+  }
+  if (user_ef > nframes)
+  {
+    gmx_fatal(FARGS,"\nArgument to -ef must be between 1 and last frame.\n");
+  }
+  if (user_bf < 1)
+  {
+    bf = 1;
+  }
+  else
+  {
+    bf = user_bf;
+  }
+  if (user_ef < 1)
+  {
+    ef = nframes;
+  }
+  else
+  {
+    ef = user_ef;
+  }
+  if (ef < bf)
+  {
+    gmx_fatal(FARGS,"\nArgument to -bf must be less than argument to -ef.\n");
+  }
+  
+  // Check for errors for the -td option before calculations begin.
+  if (bTD)
+  {
+    if (user_td < 1)
+    {
+      gmx_fatal(FARGS,"\nThe -tdo option requires -td to be set. \n");
+    }
+    if (user_td >= nframes)
+    {
+      gmx_fatal(FARGS,"\nValue of -td must be less than nframes - 1.\n");
+    }
+  }
   
   
   // Create an array to hold all frames.
@@ -842,78 +945,9 @@ int gmx_isdcmds(int argc,char *argv[])
       if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
         bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
         bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-        bPHIPSI2 || bANGDIH2G)
+        bPHIPSI2 || bANGDIH2G || bRROT)
       {
         ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
-      }
-      
-      // RMSD with random rotation. User gives -rrot option.
-      if (bRROT)
-      {
-        // Solve for three random numbers.
-        for (k = 0; k < 3; k++)
-        {
-          rrot_xyz[k] = 2.0 * pi * ((real)rand() / RAND_MAX) - pi;
-        }
-        // Create x, y, z rotation matrices and multiply.
-        clear_mat(rrotx);
-        clear_mat(rroty);
-        clear_mat(rrotz);
-        /*      Rx = rrotx[rows][cols]
-         * 
-         *      |   1.0   |   0.0   |   0.0   |
-         * Rx = |   0.0   |  cos(x) |  sin(x) |
-         *      |   0.0   | -sin(x) |  cos(x) |
-         */
-        rrotx[0][0] = 1.0;
-        rrotx[1][1] = cos(rrot_xyz[0]);
-        rrotx[2][2] = rrotx[1][1];
-        rrotx[1][2] = sin(rrot_xyz[0]);
-        rrotx[2][1] = -1.0 * rrotx[1][2];
-        /*      Ry = rroty[rows][cols]
-         * 
-         *      |  cos(x) |   0.0   | -sin(x) |
-         * Ry = |   0.0   |   1.0   |   0.0   |
-         *      |  sin(x) |   0.0   |  cos(x) |
-         */
-        rroty[1][1] = 1.0;
-        rroty[0][0] = cos(rrot_xyz[1]);
-        rroty[2][2] = rroty[0][0];
-        rroty[2][0] = sin(rrot_xyz[1]);
-        rroty[0][2] = -1.0 * rroty[2][0];
-        /*      Rz = rrotz[rows][cols]
-         * 
-         *      |  cos(x) |  sin(x) |   0.0   |
-         * Rz = | -sin(x) |  cos(x) |   0.0   |
-         *      |   0.0   |   0.0   |   1.0   |
-         */
-        rrotz[2][2] = 1.0;
-        rrotz[0][0] = cos(rrot_xyz[2]);
-        rrotz[1][1] = rrotz[0][0];
-        rrotz[0][1] = sin(rrot_xyz[2]);
-        rrotz[1][0] = -1.0 * rrotz[0][1];
-        // Multiply rotation matrices.
-        mmul(rrotx, rroty, rrot);
-        copy_mat(rrot, rrotx);
-        mmul(rrotx, rrotz, rrot);
-        // Apply random rotation.
-        for (k = 0; k < iatoms; k++)
-        {
-          for (m = 0; m < 3; m++)
-          {
-            xold[m] = rframe[k][m];
-          }
-          for (m = 0; m < 3; m++)
-          {
-            rframe[k][m] = 0;
-            for (n = 0; n < 3; n++)
-            {
-              rframe[k][m] += rrot[m][n] * xold[n];
-            }
-          }
-        }
-        // Calculate RMSD after rotation.
-        ISD = sqrt(calc_msd(iatoms, cframe, rframe));
       }
       
       // MAMMOTH. User gives -mammoth option.
