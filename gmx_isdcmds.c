@@ -189,7 +189,7 @@ int gmx_isdcmds(int argc,char *argv[])
   static gmx_bool bACOR=FALSE, bESA=FALSE, bRMSD=FALSE, bMIR=FALSE;
   static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bSE2E=FALSE;
   static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bANGDIH2G=FALSE;
-  static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE;
+  static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE, bRMSDIH=FALSE;
   static int nt          = -1;
   static real setmax     = -1.0;
   static real rcutoff    =  1.1;
@@ -213,6 +213,8 @@ int gmx_isdcmds(int argc,char *argv[])
     "ISDM: Attempts to euclideanize -angdih." },
     { "-angdih2g", FALSE, etBOOL, {&bANGDIH2G},
     "ISDM: Attempts to euclideanize -angdih. Geometric mean." },
+    { "-rmsdih", FALSE, etBOOL, {&bRMSDIH},
+    "ISDM: Distances between points aligned by backbone dihedrals. " },
     { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
     "ISDM: Mean cosine of difference of phi and psi angles. "
     "Assumes only backbone atoms." },
@@ -350,7 +352,7 @@ int gmx_isdcmds(int argc,char *argv[])
   bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
   bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
   bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
-  bANGDIH2 || bPHIPSI2 || bANGDIH2G);
+  bANGDIH2 || bPHIPSI2 || bANGDIH2G || bRMSDIH);
   
   bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bPCOR);
   
@@ -426,6 +428,13 @@ int gmx_isdcmds(int argc,char *argv[])
   {
     fprintf(stderr,"\nUsing geometric mean of angles and dihedrals as ISDM.\n");
     ISDM = "ANGDIH2G";
+    noptions++;
+  }
+  
+  if (bRMSDIH)
+  {
+    fprintf(stderr,"\nUsing RMSD of dihedrals as ISDM.\n");
+    ISDM = "RMSDIH";
     noptions++;
   }
   
@@ -842,7 +851,7 @@ int gmx_isdcmds(int argc,char *argv[])
       if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
         bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
         bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-        bPHIPSI2 || bANGDIH2G)
+        bPHIPSI2 || bANGDIH2G || bRMSDIH)
       {
         ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
       }

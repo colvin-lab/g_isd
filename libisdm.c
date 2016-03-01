@@ -1904,6 +1904,452 @@ real calc_angdih2g_n(int iatoms, rvec frame[], rvec rframe[], real angdih[])
 
 
 
+real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
+{
+    // Error checking.
+    if (iatoms < 6)
+    {
+        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_rmsdih.");
+    }
+    // Initializing variables.
+    int i;
+    double pi20 = 3.14159265358979323846;
+    double ir2, rr2, irrr, itheta, rtheta, cosiphi, thetaphi, cosrphi, cosdphi;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+//    real iphi, rphi;
+    
+    double sum_rmsdih = 0.0;
+    // There are n - 3 backbone dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Find the value of r2.
+         */
+        ir2 = (double)distance2(frame[i - 1],  frame[i]);
+        rr2 = (double)distance2(rframe[i - 1], rframe[i]);
+        
+        /* Find the value of theta.
+         * 
+         * itheta is the angle of two vectors made by three atom coords 
+         * in frame. rtheta is the same for rframe.
+         */
+        rvec_sub(frame[i - 2],  frame[i - 1], vec1);
+        rvec_sub(frame[i],      frame[i - 1], vec2);
+        itheta = (double)gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 2], rframe[i - 1], vec1);
+        rvec_sub(rframe[i],     rframe[i - 1], vec2);
+        rtheta = (double)gmx_angle(vec1, vec2);
+        
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         iphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign.
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             iphi *= -1.0;
+//         }
+        cosiphi = (double)cos_angle(pvec1, pvec2);
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         rphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign. Result lies in range [-pi, pi].
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             rphi *= -1.0;
+//         }
+        cosrphi = (double)cos_angle(pvec1, pvec2);
+        
+//         // Solve for the difference between the two angles.
+//         dphi = (double)(iphi - rphi);
+//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+//         if (dphi > pi20)
+//         {
+//             dphi -= 2 * pi20;
+//         }
+//         else if (dphi < -pi20)
+//         {
+//             dphi += 2 * pi20;
+//         }
+        cosdphi  = cosiphi * cosrphi;
+        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        
+        
+        // Calculate the distance between two points in spherical coords.
+        irrr        = 2 * sqrt(ir2) * sqrt(rr2);
+        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi   += cos(itheta) * cos(rtheta);
+        // Update the sum.
+        sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
+    }
+    
+    
+        // There are n - 3 backbone dihedral angles.
+    for (i = 0; i < (iatoms - 3); i++)
+    {
+        /* Find the value of r2.
+         */
+        ir2 = (double)distance2(frame[i + 1],  frame[i]);
+        rr2 = (double)distance2(rframe[i + 1], rframe[i]);
+        
+        /* Find the value of theta.
+         * 
+         * itheta is the angle of two vectors made by three atom coords 
+         * in frame. rtheta is the same for rframe.
+         */
+        rvec_sub(frame[i + 2],  frame[i + 1], vec1);
+        rvec_sub(frame[i],      frame[i + 1], vec2);
+        itheta = (double)gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i + 2], rframe[i + 1], vec1);
+        rvec_sub(rframe[i],     rframe[i + 1], vec2);
+        rtheta = (double)gmx_angle(vec1, vec2);
+        
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i + 3], frame[i + 2], vec1);
+        rvec_sub(frame[i + 1], frame[i + 2], vec2);
+        rvec_sub(frame[i + 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         iphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign.
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             iphi *= -1.0;
+//         }
+        cosiphi = (double)cos_angle(pvec1, pvec2);
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i + 3], rframe[i + 2], vec1);
+        rvec_sub(rframe[i + 1], rframe[i + 2], vec2);
+        rvec_sub(rframe[i + 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         rphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign. Result lies in range [-pi, pi].
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             rphi *= -1.0;
+//         }
+        cosrphi = (double)cos_angle(pvec1, pvec2);
+        
+//         // Solve for the difference between the two angles.
+//         dphi = (double)(iphi - rphi);
+//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+//         if (dphi > pi20)
+//         {
+//             dphi -= 2 * pi20;
+//         }
+//         else if (dphi < -pi20)
+//         {
+//             dphi += 2 * pi20;
+//         }
+        cosdphi  = cosiphi * cosrphi;
+        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        
+        
+        // Calculate the distance between two points in spherical coords.
+        irrr        = 2 * sqrt(ir2) * sqrt(rr2);
+        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi   += cos(itheta) * cos(rtheta);
+        // Update the sum.
+        sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
+    }
+    
+    // Calculate the final value.
+    sum_rmsdih /= 2 * (double)iatoms - 6;
+    sum_rmsdih  = sqrt(sum_rmsdih);
+    
+    // Output.
+    return (real)sum_rmsdih;
+}
+
+
+
+real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
+{
+    // Error checking.
+    if (iatoms < 6)
+    {
+        gmx_fatal(FARGS, "Need at least 6 atoms in index group to use calc_rmsdih.");
+    }
+    // Initializing variables.
+    int i;
+    double pi20 = 3.14159265358979323846;
+    double ir2, rr2, irrr, itheta, rtheta, thetaphi, cosiphi, cosrphi, cosdphi;
+    rvec vec1, vec2, vec3, pvec1, pvec2;
+//    real iphi, rphi;
+    
+    double sum_rmsdih = 0.0;
+    for (i = 0; i < iatoms; i++)
+    {
+        rmsdih[i] = 0.0;
+    }
+    // There are n - 3 backbone dihedral angles.
+    for (i = 3; i < iatoms; i++)
+    {
+        /* Find the value of r2.
+         */
+        ir2 = (double)distance2(frame[i - 1],  frame[i]);
+        rr2 = (double)distance2(rframe[i - 1], rframe[i]);
+        
+        /* Find the value of theta.
+         * 
+         * itheta is the angle of two vectors made by three atom coords 
+         * in frame. rtheta is the same for rframe.
+         */
+        rvec_sub(frame[i - 2],  frame[i - 1], vec1);
+        rvec_sub(frame[i],      frame[i - 1], vec2);
+        itheta = (double)gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i - 2], rframe[i - 1], vec1);
+        rvec_sub(rframe[i],     rframe[i - 1], vec2);
+        rtheta = (double)gmx_angle(vec1, vec2);
+        
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i - 3], frame[i - 2], vec1);
+        rvec_sub(frame[i - 1], frame[i - 2], vec2);
+        rvec_sub(frame[i - 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         iphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign.
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             iphi *= -1.0;
+//         }
+        cosiphi = (double)cos_angle(pvec1, pvec2);
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i - 3], rframe[i - 2], vec1);
+        rvec_sub(rframe[i - 1], rframe[i - 2], vec2);
+        rvec_sub(rframe[i - 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         rphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign. Result lies in range [-pi, pi].
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             rphi *= -1.0;
+//         }
+        cosrphi = (double)cos_angle(pvec1, pvec2);
+        
+//         // Solve for the difference between the two angles.
+//         dphi = (double)(iphi - rphi);
+//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+//         if (dphi > pi20)
+//         {
+//             dphi -= 2 * pi20;
+//         }
+//         else if (dphi < -pi20)
+//         {
+//             dphi += 2 * pi20;
+//         }
+        cosdphi  = cosiphi * cosrphi;
+        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        
+        
+        // Calculate the distance between two points in spherical coords.
+        irrr        = 2 * sqrt(ir2) * sqrt(rr2);
+        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi   += cos(itheta) * cos(rtheta);
+        // Update the sum.
+        rmsdih[i]  += ir2 + rr2 - irrr * thetaphi;
+        sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
+    }
+    
+    
+        // There are n - 3 backbone dihedral angles.
+    for (i = 0; i < (iatoms - 3); i++)
+    {
+        /* Find the value of r2.
+         */
+        ir2 = (double)distance2(frame[i + 1],  frame[i]);
+        rr2 = (double)distance2(rframe[i + 1], rframe[i]);
+        
+        /* Find the value of theta.
+         * 
+         * itheta is the angle of two vectors made by three atom coords 
+         * in frame. rtheta is the same for rframe.
+         */
+        rvec_sub(frame[i + 2],  frame[i + 1], vec1);
+        rvec_sub(frame[i],      frame[i + 1], vec2);
+        itheta = (double)gmx_angle(vec1, vec2);
+        
+        rvec_sub(rframe[i + 2], rframe[i + 1], vec1);
+        rvec_sub(rframe[i],     rframe[i + 1], vec2);
+        rtheta = (double)gmx_angle(vec1, vec2);
+        
+        /* Use four atom coordinates to make two planes defined
+         * by three atom coordinates on each plane.
+         * 
+         * Find the angle between the two planes by calculating two
+         * vectors normal to each plane.
+         * 
+         * Most algorithms only return an angle between 0 and
+         * pi rather than the full 2 * pi possible range. The
+         * method of using the sign of the inner product of
+         * the vector normal to one plane with a vector on the
+         * other plane comes from bondfree.c in the gromacs
+         * source.
+         * 
+         * Note that since the result is the difference of two
+         * angles, the directionality of the sign is unimportant
+         * as long as it is consistent.
+         */
+        // Convert four atom coordinates into three vectors.
+        rvec_sub(frame[i + 3], frame[i + 2], vec1);
+        rvec_sub(frame[i + 1], frame[i + 2], vec2);
+        rvec_sub(frame[i + 1], frame[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         iphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign.
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             iphi *= -1.0;
+//         }
+        cosiphi = (double)cos_angle(pvec1, pvec2);
+        
+        /* Repeat for the reference frame.
+         */
+        // Make three vectors.
+        rvec_sub(rframe[i + 3], rframe[i + 2], vec1);
+        rvec_sub(rframe[i + 1], rframe[i + 2], vec2);
+        rvec_sub(rframe[i + 1], rframe[i],     vec3);
+        // Convert three vectors into two normal to each plane.
+        cprod(vec1, vec2, pvec1);
+        cprod(vec2, vec3, pvec2);
+//         // Find the angle between plane vectors.
+//         rphi = gmx_angle(pvec1, pvec2);
+//         // Calculate and apply the sign. Result lies in range [-pi, pi].
+//         if (iprod(vec1, pvec2) < 0.0)
+//         {
+//             rphi *= -1.0;
+//         }
+        cosrphi = (double)cos_angle(pvec1, pvec2);
+        
+//         // Solve for the difference between the two angles.
+//         dphi = (double)(iphi - rphi);
+//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+//         if (dphi > pi20)
+//         {
+//             dphi -= 2 * pi20;
+//         }
+//         else if (dphi < -pi20)
+//         {
+//             dphi += 2 * pi20;
+//         }
+        cosdphi  = cosiphi * cosrphi;
+        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        
+        
+        // Calculate the distance between two points in spherical coords.
+        irrr        = 2 * sqrt(ir2) * sqrt(rr2);
+        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi   += cos(itheta) * cos(rtheta);
+        // Update the sum.
+        rmsdih[i]  += ir2 + rr2 - irrr * thetaphi;
+        sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
+    }
+    
+    rmsdih[0]          = sqrt(rmsdih[0]);
+    for (i = 1; i < (iatoms - 1); i++)
+    {
+        rmsdih[i] /= 2;
+        rmsdih[i]  = sqrt(rmsdih[i]);
+    }
+    rmsdih[iatoms - 1] = sqrt(rmsdih[iatoms - 1]);
+    
+    // Calculate the final value.
+    sum_rmsdih /= 2 * (double)iatoms - 6;
+    sum_rmsdih  = sqrt(sum_rmsdih);
+    
+    // Output.
+    return (real)sum_rmsdih;
+}
+
+
+
 real calc_phipsi(int iatoms, rvec frame[], rvec rframe[])
 {
     // Error checking.
@@ -3112,6 +3558,13 @@ real call_ISDM(int iatoms, rvec cframe[], rvec rframe[], const char *ISDM)
         return calc_angdih2(iatoms, cframe, rframe, 10.0);
     }
     
+    // Angles and dihedrals. User gives -angdih option.
+    if (strcmp(ISDM, "RMSDIH") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_rmsdih(iatoms, cframe, rframe);
+    }
+    
     // Phi psi angles. User gives -phipsi option.
     if (strcmp(ISDM, "PHIPSI") == 0)
     {
@@ -3246,6 +3699,13 @@ real call_ISDM_n(int iatoms, rvec cframe[], rvec rframe[], real rISD[], const ch
     {
         // Combination of ang and dih.
         return calc_angdih2_n(iatoms, cframe, rframe, rISD, 10.0);
+    }
+    
+    // Combination of ang and dih. User gives -angdih2 option.
+    if (strcmp(ISDM, "RMSDIH") == 0)
+    {
+        // Combination of ang and dih.
+        return calc_rmsdih_n(iatoms, cframe, rframe, rISD);
     }
     
     // Phi psi angles. User gives -phipsi option.
