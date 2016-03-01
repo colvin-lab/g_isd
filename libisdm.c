@@ -1914,9 +1914,10 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
     // Initializing variables.
     int i;
     double pi20 = 3.14159265358979323846;
-    double ir2, rr2, irrr, itheta, rtheta, cosiphi, thetaphi, cosrphi, cosdphi;
+    double ir2, rr2, irrr, itheta, rtheta, dphi, thetaphi;
     rvec vec1, vec2, vec3, pvec1, pvec2;
-//    real iphi, rphi;
+//    double cosiphi, cosrphi, cosdphi;
+    real iphi, rphi;
     
     double sum_rmsdih = 0.0;
     // There are n - 3 backbone dihedral angles.
@@ -1964,14 +1965,14 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         iphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign.
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             iphi *= -1.0;
-//         }
-        cosiphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        iphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iphi *= -1.0;
+        }
+//        cosiphi = (double)cos_angle(pvec1, pvec2);
         
         /* Repeat for the reference frame.
          */
@@ -1982,33 +1983,33 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         rphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign. Result lies in range [-pi, pi].
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             rphi *= -1.0;
-//         }
-        cosrphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        rphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rphi *= -1.0;
+        }
+//        cosrphi = (double)cos_angle(pvec1, pvec2);
         
-//         // Solve for the difference between the two angles.
-//         dphi = (double)(iphi - rphi);
-//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-//         if (dphi > pi20)
-//         {
-//             dphi -= 2 * pi20;
-//         }
-//         else if (dphi < -pi20)
-//         {
-//             dphi += 2 * pi20;
-//         }
-        cosdphi  = cosiphi * cosrphi;
-        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        // Solve for the difference between the two angles.
+        dphi = (double)(iphi - rphi);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dphi > pi20)
+        {
+            dphi -= 2 * pi20;
+        }
+        else if (dphi < -pi20)
+        {
+            dphi += 2 * pi20;
+        }
+//        cosdphi  = cosiphi * cosrphi;
+//        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
         
         
         // Calculate the distance between two points in spherical coords.
         irrr        = 2 * sqrt(ir2) * sqrt(rr2);
-        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi    = sin(itheta) * sin(rtheta) * cos(dphi);
         thetaphi   += cos(itheta) * cos(rtheta);
         // Update the sum.
         sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
@@ -2060,14 +2061,14 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         iphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign.
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             iphi *= -1.0;
-//         }
-        cosiphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        iphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iphi *= -1.0;
+        }
+//        cosiphi = (double)cos_angle(pvec1, pvec2);
         
         /* Repeat for the reference frame.
          */
@@ -2078,33 +2079,33 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         rphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign. Result lies in range [-pi, pi].
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             rphi *= -1.0;
-//         }
-        cosrphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        rphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rphi *= -1.0;
+        }
+//         cosrphi = (double)cos_angle(pvec1, pvec2);
         
-//         // Solve for the difference between the two angles.
-//         dphi = (double)(iphi - rphi);
-//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-//         if (dphi > pi20)
-//         {
-//             dphi -= 2 * pi20;
-//         }
-//         else if (dphi < -pi20)
-//         {
-//             dphi += 2 * pi20;
-//         }
-        cosdphi  = cosiphi * cosrphi;
-        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        // Solve for the difference between the two angles.
+        dphi = (double)(iphi - rphi);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dphi > pi20)
+        {
+            dphi -= 2 * pi20;
+        }
+        else if (dphi < -pi20)
+        {
+            dphi += 2 * pi20;
+        }
+//         cosdphi  = cosiphi * cosrphi;
+//         cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
         
         
         // Calculate the distance between two points in spherical coords.
         irrr        = 2 * sqrt(ir2) * sqrt(rr2);
-        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi    = sin(itheta) * sin(rtheta) * cos(dphi);
         thetaphi   += cos(itheta) * cos(rtheta);
         // Update the sum.
         sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
@@ -2130,9 +2131,10 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
     // Initializing variables.
     int i;
     double pi20 = 3.14159265358979323846;
-    double ir2, rr2, irrr, itheta, rtheta, thetaphi, cosiphi, cosrphi, cosdphi;
+    double ir2, rr2, irrr, itheta, rtheta, dphi, thetaphi;
     rvec vec1, vec2, vec3, pvec1, pvec2;
-//    real iphi, rphi;
+//    double cosiphi, cosrphi, cosdphi;
+    real iphi, rphi;
     
     double sum_rmsdih = 0.0;
     for (i = 0; i < iatoms; i++)
@@ -2184,14 +2186,14 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         iphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign.
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             iphi *= -1.0;
-//         }
-        cosiphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        iphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iphi *= -1.0;
+        }
+//        cosiphi = (double)cos_angle(pvec1, pvec2);
         
         /* Repeat for the reference frame.
          */
@@ -2202,33 +2204,33 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         rphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign. Result lies in range [-pi, pi].
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             rphi *= -1.0;
-//         }
-        cosrphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        rphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rphi *= -1.0;
+        }
+//        cosrphi = (double)cos_angle(pvec1, pvec2);
         
-//         // Solve for the difference between the two angles.
-//         dphi = (double)(iphi - rphi);
-//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-//         if (dphi > pi20)
-//         {
-//             dphi -= 2 * pi20;
-//         }
-//         else if (dphi < -pi20)
-//         {
-//             dphi += 2 * pi20;
-//         }
-        cosdphi  = cosiphi * cosrphi;
-        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        // Solve for the difference between the two angles.
+        dphi = (double)(iphi - rphi);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dphi > pi20)
+        {
+            dphi -= 2 * pi20;
+        }
+        else if (dphi < -pi20)
+        {
+            dphi += 2 * pi20;
+        }
+//        cosdphi  = cosiphi * cosrphi;
+//        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
         
         
         // Calculate the distance between two points in spherical coords.
         irrr        = 2 * sqrt(ir2) * sqrt(rr2);
-        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi    = sin(itheta) * sin(rtheta) * cos(dphi);
         thetaphi   += cos(itheta) * cos(rtheta);
         // Update the sum.
         rmsdih[i]  += ir2 + rr2 - irrr * thetaphi;
@@ -2281,14 +2283,14 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         iphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign.
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             iphi *= -1.0;
-//         }
-        cosiphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        iphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign.
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            iphi *= -1.0;
+        }
+//         cosiphi = (double)cos_angle(pvec1, pvec2);
         
         /* Repeat for the reference frame.
          */
@@ -2299,40 +2301,40 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
         // Convert three vectors into two normal to each plane.
         cprod(vec1, vec2, pvec1);
         cprod(vec2, vec3, pvec2);
-//         // Find the angle between plane vectors.
-//         rphi = gmx_angle(pvec1, pvec2);
-//         // Calculate and apply the sign. Result lies in range [-pi, pi].
-//         if (iprod(vec1, pvec2) < 0.0)
-//         {
-//             rphi *= -1.0;
-//         }
-        cosrphi = (double)cos_angle(pvec1, pvec2);
+        // Find the angle between plane vectors.
+        rphi = gmx_angle(pvec1, pvec2);
+        // Calculate and apply the sign. Result lies in range [-pi, pi].
+        if (iprod(vec1, pvec2) < 0.0)
+        {
+            rphi *= -1.0;
+        }
+//         cosrphi = (double)cos_angle(pvec1, pvec2);
         
-//         // Solve for the difference between the two angles.
-//         dphi = (double)(iphi - rphi);
-//         // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
-//         if (dphi > pi20)
-//         {
-//             dphi -= 2 * pi20;
-//         }
-//         else if (dphi < -pi20)
-//         {
-//             dphi += 2 * pi20;
-//         }
-        cosdphi  = cosiphi * cosrphi;
-        cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
+        // Solve for the difference between the two angles.
+        dphi = (double)(iphi - rphi);
+        // Rescale dihi from [-2.0 * pi, +2.0 * pi] to [-pi, +pi].
+        if (dphi > pi20)
+        {
+            dphi -= 2 * pi20;
+        }
+        else if (dphi < -pi20)
+        {
+            dphi += 2 * pi20;
+        }
+//         cosdphi  = cosiphi * cosrphi;
+//         cosdphi += sqrt(1 - cosiphi * cosiphi) * sqrt(1 - cosrphi * cosrphi);
         
         
         // Calculate the distance between two points in spherical coords.
         irrr        = 2 * sqrt(ir2) * sqrt(rr2);
-        thetaphi    = sin(itheta) * sin(rtheta) * cosdphi;
+        thetaphi    = sin(itheta) * sin(rtheta) * cos(dphi);
         thetaphi   += cos(itheta) * cos(rtheta);
         // Update the sum.
         rmsdih[i]  += ir2 + rr2 - irrr * thetaphi;
         sum_rmsdih += ir2 + rr2 - irrr * thetaphi;
     }
     
-    rmsdih[0]          = sqrt(rmsdih[0]);
+    rmsdih[0] = sqrt(rmsdih[0]);
     for (i = 1; i < (iatoms - 1); i++)
     {
         rmsdih[i] /= 2;

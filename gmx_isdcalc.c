@@ -76,7 +76,7 @@ int gmx_isdcalc(int argc,char *argv[])
     static gmx_bool bRG=FALSE, bSRG=FALSE, bE2E=FALSE, bANGDIH2G=FALSE;
     static gmx_bool bANG2=FALSE, bDIH2=FALSE, bANGDIH2=FALSE, bSE2E=FALSE;
     static gmx_bool bRROT=FALSE, bSDRMS=FALSE, bPHIPSI2=FALSE, bGMRG=FALSE;
-    static gmx_bool bMRMS=FALSE;
+    static gmx_bool bMRMS=FALSE, bRMSDIH=FALSE;
     static int      user_bf = -1, user_ef = -1, user_td = -1, user_tdsens = -1;
     static real     setmax = -1.0;
     t_pargs pa[] = {
@@ -96,6 +96,8 @@ int gmx_isdcalc(int argc,char *argv[])
             "ISDM: Attempts to euclideanize -angdih." },
         { "-angdih2g", FALSE, etBOOL, {&bANGDIH2G},
             "ISDM: Geometric mean based on -angdih2." },
+        { "-rmsdih", FALSE, etBOOL, {&bRMSDIH},
+            "ISDM: RMSD of backbone dihedrals." },
         { "-phipsi", FALSE, etBOOL, {&bPHIPSI},
             "ISDM: Mean cosine of difference of phi and psi angles. "
             "Assumes only backbone atoms." },
@@ -312,7 +314,7 @@ int gmx_isdcalc(int argc,char *argv[])
      */
     bDFLT = !(bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || bSRMS || bRMSD || 
               bPCOR || bACOR || bMAMMOTH || bESA || bRG || bSRG || bE2E || 
-              bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || 
+              bSE2E || bMIR || bRROT || bSDRMS || bANG2 || bDIH2 || bRMSDIH || 
               bPHIPSI2 || bANGDIH2 || bANGDIH2G || bGMRG || bMRMS);
     
     bFit  =  (bDFLT || bRMSD || bMIR || bSRMS || bMRMS || bPCOR);
@@ -471,6 +473,13 @@ int gmx_isdcalc(int argc,char *argv[])
     {
         fprintf(stderr,"\nUsing geometric mean of RMS angles and RMS dihedrals as ISDM.\n");
         ISDM = "ANGDIH2G";
+        noptions++;
+    }
+    
+    if (bRMSDIH)
+    {
+        fprintf(stderr,"\nUsing RMSD of backbone dihedrals as ISDM.\n");
+        ISDM = "RMSDIH";
         noptions++;
     }
     
@@ -953,7 +962,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT || bRMSDIH)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
