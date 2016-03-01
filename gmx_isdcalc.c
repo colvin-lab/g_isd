@@ -832,7 +832,7 @@ int gmx_isdcalc(int argc,char *argv[])
             if (bDFLT || bRMSD || bSRMS || bRG || bSRG || bE2E || bSE2E || 
                 bMIR || bANG || bDIH || bANGDIH || bPHIPSI || bDRMS || 
                 bSDRMS || bPCOR || bACOR || bANG2 || bDIH2 || bANGDIH2 || 
-                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT)
+                bPHIPSI2 || bANGDIH2G || bGMRG || bMRMS || bRROT || bRMSDIH)
             {
                 ISD = call_ISDM(iatoms, cframe, rframe, ISDM);
             }
