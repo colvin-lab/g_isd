@@ -1935,11 +1935,11 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
          */
         rvec_sub(frame[i - 2],  frame[i - 1], vec1);
         rvec_sub(frame[i],      frame[i - 1], vec2);
-        itheta = (double)gmx_angle(vec1, vec2);
+        itheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         rvec_sub(rframe[i - 2], rframe[i - 1], vec1);
         rvec_sub(rframe[i],     rframe[i - 1], vec2);
-        rtheta = (double)gmx_angle(vec1, vec2);
+        rtheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on each plane.
@@ -2031,11 +2031,11 @@ real calc_rmsdih(int iatoms, rvec frame[], rvec rframe[])
          */
         rvec_sub(frame[i + 2],  frame[i + 1], vec1);
         rvec_sub(frame[i],      frame[i + 1], vec2);
-        itheta = (double)gmx_angle(vec1, vec2);
+        itheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         rvec_sub(rframe[i + 2], rframe[i + 1], vec1);
         rvec_sub(rframe[i],     rframe[i + 1], vec2);
-        rtheta = (double)gmx_angle(vec1, vec2);
+        rtheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on each plane.
@@ -2156,11 +2156,11 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
          */
         rvec_sub(frame[i - 2],  frame[i - 1], vec1);
         rvec_sub(frame[i],      frame[i - 1], vec2);
-        itheta = (double)gmx_angle(vec1, vec2);
+        itheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         rvec_sub(rframe[i - 2], rframe[i - 1], vec1);
         rvec_sub(rframe[i],     rframe[i - 1], vec2);
-        rtheta = (double)gmx_angle(vec1, vec2);
+        rtheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on each plane.
@@ -2253,11 +2253,11 @@ real calc_rmsdih_n(int iatoms, rvec frame[], rvec rframe[], real rmsdih[])
          */
         rvec_sub(frame[i + 2],  frame[i + 1], vec1);
         rvec_sub(frame[i],      frame[i + 1], vec2);
-        itheta = (double)gmx_angle(vec1, vec2);
+        itheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         rvec_sub(rframe[i + 2], rframe[i + 1], vec1);
         rvec_sub(rframe[i],     rframe[i + 1], vec2);
-        rtheta = (double)gmx_angle(vec1, vec2);
+        rtheta = pi20 - (double)gmx_angle(vec1, vec2);
         
         /* Use four atom coordinates to make two planes defined
          * by three atom coordinates on each plane.
